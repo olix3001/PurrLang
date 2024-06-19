@@ -1,4 +1,4 @@
-use common::FileRange;
+use common::{FileRange, PurrSource};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Statement {
@@ -8,7 +8,9 @@ pub struct Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementKind {
-    Module(Vec<Statement>, Attributes)
+    // Module can change source files after being inlined
+    // for compilation.
+    Module(Vec<Statement>, Attributes, PurrSource)
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

@@ -1,12 +1,31 @@
 use error::SyntaxError;
 use logos::{Logos, Lexer};
-use common::PurrSource;
+use common::{FileRange, PurrSource};
 
 use crate::ast;
 
-// ==< Lexer >==
+macro_rules! expected {
+    ($expected:expr, $tokens:expr, $notes:expr, $a:expr) => {
+        Err(SyntaxError::ExpectedToken {
+            expected: $expected,
+            found: format!(
+                "{}: \"{}\"",
+                match $a {
+                    Some(t) => t.typ(),
+                    None => "EOF"
+                },
+                $tokens.text().unwrap()
+            ),
+            pos: $tokens.position().unwrap(),
+            file: $notes.file.clone()
+        })
+    };
+}
 
+// ==< Lexer >==
 #[derive(Logos, Debug, PartialEq, Copy, Clone)]
+#[logos(skip r"[ \t\r\n\f]+")]
+#[logos(skip r"//[^\n]*")]
 pub enum Token {
     // ==< Operators >==
     #[token("|")]  Pipe,
@@ -111,6 +130,7 @@ impl<'src> Token {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ParseNotes {
     pub attributes: ast::Attributes,
     pub file: PurrSource
@@ -128,7 +148,7 @@ impl ParseNotes {
 #[derive(Clone)]
 pub struct Tokens<'src> {
     iter: Lexer<'src, Token>,
-    stack: Vec<(Option<Token>, String, core::ops::Range<usize>)>,
+    stack: Vec<(Option<Token>, String, FileRange)>,
     index: usize
 }
 
@@ -141,8 +161,8 @@ impl<'src> Tokens<'src> {
         }
     }
 
-    fn _next(&mut self) -> Option<Token> {
-        if self.index == 0 {
+    fn next(&mut self) -> Option<Token> {
+        if self.index == self.stack.len() {
             let next_elem = self.iter.next();
             if let Some(Err(_)) = next_elem { return None; }
             let next_elem = next_elem.map(|e| e.unwrap());
@@ -151,53 +171,149 @@ impl<'src> Tokens<'src> {
             let range = self.iter.span();
 
             self.stack.push((next_elem, slice, range));
+            self.index += 1;
             next_elem
         } else {
+            if self.index >= self.stack.len() {
+                return None;
+            }
+            self.index += 1;
+            self.stack[self.index - 1].0
+        }
+    }
+
+    fn previous(&mut self) -> Option<Token> {
+        if self.index < 1 { return None; }
+        self.index -= 1;
+        self.next()
+    }
+
+    fn back(&mut self) -> bool {
+        if self.index < 1 { return false }
+        self.index -= 1;
+        true
+    }
+
+    fn peek(&mut self) -> Option<Token> {
+        let next = self.next();
+        if next.is_some() {
             self.index -= 1;
-            self.stack[self.stack.len() - self.index - 1].0
         }
+        next
     }
 
-    fn next(&mut self, skip_separator: bool) -> Option<Token> {
-        let next_elem = self._next();
-
-        if !skip_separator && next_elem == Some(Token::Semi) {
-            self.next(skip_separator)
-        } else {
-            next_elem
+    fn position(&self) -> Option<FileRange> {
+        if self.index < 1 { return None; }
+        if self.index-1 > self.stack.len()  {
+            return None;
         }
+        Some(self.stack[self.index-1].2.clone())
     }
 
-    fn _previous(&mut self, skip_separator: bool) -> Option<Token> {
-        self.index += 1;
-        let len = self.stack.len();
-        if len < self.index { return None }
-
-        self.next(skip_separator)
-    }
-
-    fn previous(&mut self) -> Option<Token> { self._previous(false) }
-
-    fn current(&self) -> Option<Token> {
-        let len = self.stack.len();
-        if len == 0 || len - self.index < 1 {
-            None
-        } else {
-            self.stack[len - self.index - 1].0
+    fn text(&self) -> Option<&str> {
+        if self.index < 1 { return None; }
+        if self.index-1 > self.stack.len()  {
+            return None;
         }
-    }
-
-    fn position(&self) -> core::ops::Range<usize> {
-        if self.stack.len() - self.index == 0 {
-            return 0..0;
-        }
-        self.stack[self.stack.len() - self.index - 1].2.clone()
+        Some(&self.stack[self.index-1].1)
     }
 }
 
+// ==< Parser >==
+
 pub fn parse_purr(
-    mut unparsed: String,
+    unparsed: String,
     source: PurrSource,
 ) -> Result<(Vec<ast::Statement>, ParseNotes), SyntaxError> {
-    todo!("Parser is not yet implemented")
+    // Initialize basic structures.
+    let tokens_iter = Token::lexer(&unparsed);
+    let mut tokens = Tokens::new(tokens_iter);
+    let mut statements = Vec::<ast::Statement>::new();
+    let mut notes = ParseNotes::new(source);
+
+    notes.attributes = parse_attributes(&mut tokens, &mut notes, true)?;
+
+    Ok((statements, notes))
+}
+
+pub fn parse_attributes(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    is_top_level: bool
+) -> Result<ast::Attributes, SyntaxError> {
+    let mut attributes = ast::Attributes::default();
+
+    loop {
+        let next = tokens.next();
+        match next {
+            Some(Token::Hash) => {
+                // If we're expecting top level attributes
+                // expect additional bang symbol.
+                if is_top_level {
+                    if tokens.next() != Some(Token::Bang) {
+                        tokens.back();
+                        return Ok(attributes);
+                    }
+                }
+
+                expect(tokens, notes, Token::LSquare)?;
+
+                // Marker attributes only for now.
+                expect(tokens, notes, Token::Ident)?;
+                attributes.tags.push(ast::AttributeTag::Marker(
+                    tokens.text().unwrap().to_string()
+                ));
+                expect(tokens, notes, Token::RSquare)?;
+            },
+            _ => {
+                tokens.back();
+                return Ok(attributes)
+            }
+        }
+    }
+}
+
+fn expect(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    token: Token
+) -> Result<Token, SyntaxError> {
+    let next = tokens.next();
+    if next == Some(token) {
+        return Ok(next.unwrap());
+    }
+    expected!(
+        format!("{:?}", token), // TODO: Replace with textual representation.
+        tokens, notes, next
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use common::PurrSource;
+
+    use crate::{ast, parser::ParseNotes};
+
+    use super::parse_purr;
+
+    #[test]
+    fn parse_top_level_attributes() {
+        let parse_result = parse_purr("
+            #![hello]
+            #![world]
+        ".to_string(), PurrSource::Unknown);
+
+        assert_eq!(
+            parse_result.unwrap().1,
+            ParseNotes {
+                attributes: ast::Attributes {
+                    tags: vec![
+                        ast::AttributeTag::Marker("hello".to_string()),
+                        ast::AttributeTag::Marker("world".to_string())
+                    ]
+                },
+                file: PurrSource::Unknown,
+            }
+        )
+    }
 }
