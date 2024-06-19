@@ -92,15 +92,19 @@ pub enum Token {
     #[token("mod")] Module,
     #[token("break")] Break,
     #[token("continue")] Continue,
+
+    // ==< Primitive types >==
     #[token("void")] Void,
+    #[token("number")] Number,
+    #[token("text")] Text,
 
     // ==< Values >==
     #[regex(r"([a-zA-Z_][a-zA-Z0-9_]*)")]
     Ident,
     #[regex(r"[0-9][_0-9]*(\.[0-9][_0-9]*)?")]
-    Number,
+    NumberLit,
     #[regex(r"0x[a-fA-F0-9][_a-fA-F0-9]*")]
-    HexNumber,
+    HexNumberLit,
     #[regex(r#"[a-z0-9]*("(?:\\.|[^\\"])*"|'(?:\\.|[^\\'])*')"#)]
     StringLiteral,
 
@@ -127,11 +131,11 @@ impl<'src> Token {
             Impl | For | While | Loop | If | Else | Return | Define |
             Comptime | Match | Module | Break | Continue => "keyword",
 
-            Number | HexNumber => "number literal",
+            NumberLit | HexNumberLit => "number literal",
             StringLiteral => "string literal",
             True | False => "boolean literal",
 
-            Void => "type"
+            Void | Number | Text => "type"
         }
     }
 }
@@ -368,6 +372,8 @@ pub fn parse_ty(
 
     let kind: ast::TyKind = match first {
         Some(Token::Void) => ast::TyKind::Void,
+        Some(Token::Number) => ast::TyKind::Number,
+        Some(Token::Text) => ast::TyKind::Text,
         Some(Token::Bang) => ast::TyKind::Never,
         Some(Token::Ident) => { // Path variant
             tokens.back();

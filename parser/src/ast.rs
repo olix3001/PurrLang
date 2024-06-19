@@ -70,6 +70,9 @@ pub enum TyKind {
     Infer,
     Void,
 
+    Number,
+    Text,
+
     Path(PurrPath)
 }
 
