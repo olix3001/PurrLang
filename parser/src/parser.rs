@@ -89,6 +89,10 @@ pub enum Token {
     #[token("def")] Define,
     #[token("comptime")] Comptime,
     #[token("match")] Match,
+    #[token("mod")] Module,
+    #[token("break")] Break,
+    #[token("continue")] Continue,
+    #[token("void")] Void,
 
     // ==< Values >==
     #[regex(r"([a-zA-Z_][a-zA-Z0-9_]*)")]
@@ -121,11 +125,13 @@ impl<'src> Token {
 
             Block | Const | Let | Cloud | Global | Enum | Struct |
             Impl | For | While | Loop | If | Else | Return | Define |
-            Comptime | Match => "keyword",
+            Comptime | Match | Module | Break | Continue => "keyword",
 
             Number | HexNumber => "number literal",
             StringLiteral => "string literal",
             True | False => "boolean literal",
+
+            Void => "type"
         }
     }
 }
@@ -202,6 +208,14 @@ impl<'src> Tokens<'src> {
         next
     }
 
+    fn check(&mut self, token: Token) -> bool {
+        let next = self.next();
+        if next != Some(token) {
+            self.back();
+            false
+        } else { true }
+    }
+
     fn position(&self) -> Option<FileRange> {
         if self.index < 1 { return None; }
         if self.index-1 > self.stack.len()  {
@@ -233,7 +247,79 @@ pub fn parse_purr(
 
     notes.attributes = parse_attributes(&mut tokens, &mut notes, true)?;
 
+    loop {
+        match tokens.peek() {
+            Some(_) =>
+                statements.push(
+                    parse_statement(&mut tokens, &mut notes)?
+                ),
+            None => break,
+        }
+    }
+
     Ok((statements, notes))
+}
+
+pub fn parse_statement(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Statement, SyntaxError> {
+    let attributes = parse_attributes(tokens, notes, false)?;
+
+    let first = tokens.next();
+    let start_pos = tokens.position().unwrap().start;
+    let kind: ast::StatementKind = match first {
+        Some(Token::Let) => {
+            // Let definition statement.
+            // This handles local variable creation.
+            
+            let name = expect_ident(tokens, notes)?;
+
+            let ty = if tokens.check(Token::Colon) {
+                parse_ty(tokens, notes)?
+            } else {
+                ast::Ty {
+                    kind: ast::TyKind::Infer,
+                    pos: 0..0
+                }
+            };
+
+            let value = if tokens.check(Token::Assign) {
+                Some(parse_expression(tokens, notes)?)
+            } else { None };
+
+            // This always has to be followed by semicolon.
+            expect(tokens, notes, Token::Semi)?;
+
+            ast::StatementKind::LetDefinition(
+                ast::LetDefinition {
+                    symbol: name,
+                    ty,
+                    value
+                }
+            )
+        }
+
+        Some(Token::Break) => ast::StatementKind::Break,
+        Some(Token::Continue) => ast::StatementKind::Continue,
+
+        Some(_) => { todo!("Parse expression/definition") },
+        None => expected!("statement".to_string(), tokens, notes, first)?,
+    };
+
+    let end_pos = tokens.position().unwrap().end;
+    Ok(ast::Statement {
+        kind,
+        attributes,
+        pos: start_pos..end_pos,
+    })
+}
+
+pub fn parse_expression(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+) -> Result<ast::Expression, SyntaxError> {
+    unimplemented!("Expressions are not implemented yet")
 }
 
 pub fn parse_attributes(
@@ -273,6 +359,100 @@ pub fn parse_attributes(
     }
 }
 
+pub fn parse_ty(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+) -> Result<ast::Ty, SyntaxError> {
+    let first = tokens.next();
+    let start_pos = tokens.position().unwrap().start;
+
+    let kind: ast::TyKind = match first {
+        Some(Token::Void) => ast::TyKind::Void,
+        Some(Token::Bang) => ast::TyKind::Never,
+        Some(Token::Ident) => { // Path variant
+            tokens.back();
+            let path = parse_path(tokens, notes)?;
+            ast::TyKind::Path(path)
+        },
+        found @ Some(_) => expected!("any type".to_string(), tokens, notes, found)?,
+        None => expected!("any type".to_string(), tokens, notes, None::<Token>)?,
+    };
+
+    let end_pos = tokens.position().unwrap().end;
+    Ok(ast::Ty {
+        kind,
+        pos: start_pos..end_pos
+    })
+}
+
+pub fn parse_path(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::PurrPath, SyntaxError> {
+    let mut segments = Vec::<ast::PurrPathSegment>::new();
+
+    tokens.next();
+    let start_pos = tokens.position().unwrap().start;
+    tokens.back();
+
+    loop {
+        let segment_name = expect_ident(tokens, notes)?;
+        let start_pos = tokens.position().unwrap().start;
+
+        // Optional generic arguments.
+        let generic_args = if tokens.check(Token::Lt) {
+            let start_pos = tokens.position().unwrap().start+1;
+            let args = separated(
+                tokens,
+                notes,
+                Token::Comma,
+                parse_ty
+            )?;
+            expect(tokens, notes, Token::Gt)?;
+            let end_pos = tokens.position().unwrap().end;
+            Some(ast::GenericArgs {
+                args,
+                pos: start_pos..end_pos
+            })
+        } else { None };
+
+        let end_pos = tokens.position().unwrap().end;
+
+        segments.push(ast::PurrPathSegment {
+            ident: segment_name,
+            args: generic_args.map(Box::new),
+            pos: start_pos..end_pos
+        });
+
+        if !tokens.check(Token::DColon) { break; }
+    }
+
+    let end_pos = tokens.position().unwrap().end;
+
+    Ok(ast::PurrPath {
+        segments,
+        pos: start_pos..end_pos
+    })
+}
+
+fn separated<T>(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    separator: Token,
+    parser: impl Fn(&mut Tokens, &mut ParseNotes) -> Result<T, SyntaxError>
+) -> Result<Vec<T>, SyntaxError> {
+    let mut result = Vec::<T>::new();
+
+    loop {
+        let value = parser(tokens, notes)?;
+        result.push(value);
+
+        if !tokens.check(separator) { break }
+    }
+
+    Ok(result)
+}
+
 fn expect(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
@@ -286,6 +466,15 @@ fn expect(
         format!("{:?}", token), // TODO: Replace with textual representation.
         tokens, notes, next
     )
+}
+
+#[inline(always)]
+fn expect_ident(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<String, SyntaxError> {
+    expect(tokens, notes, Token::Ident)?;
+    Ok(tokens.text().unwrap().to_string())
 }
 
 #[cfg(test)]
@@ -315,5 +504,13 @@ mod tests {
                 file: PurrSource::Unknown,
             }
         )
+    }
+
+    #[test]
+    fn parse_let_without_value() {
+        parse_purr(
+            "let hello_world: Lorem<Ipsum>::Dolor;".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
     }
 }
