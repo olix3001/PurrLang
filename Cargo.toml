@@ -5,3 +5,4 @@ members = ["common", "error", "parser"]
 [workspace.dependencies]
 internment = "0.8.3"
 common = { path = "./common" }
+error = { path = "./error" }

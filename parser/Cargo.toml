@@ -10,3 +10,4 @@ internment.workspace = true
 logos = "0.14.0"
 
 common.workspace = true
+error.workspace = true

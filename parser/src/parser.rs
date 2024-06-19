@@ -1,5 +1,8 @@
+use error::SyntaxError;
 use logos::{Logos, Lexer};
 use common::PurrSource;
+
+use crate::ast;
 
 // ==< Lexer >==
 
@@ -109,13 +112,14 @@ impl<'src> Token {
 }
 
 pub struct ParseNotes {
-    // pub tags: ast::Attribute,
+    pub attributes: ast::Attributes,
     pub file: PurrSource
 }
 
 impl ParseNotes {
     pub fn new(path: PurrSource) -> Self {
         Self {
+            attributes: ast::Attributes::default(),
             file: path
         }
     }
@@ -189,4 +193,11 @@ impl<'src> Tokens<'src> {
         }
         self.stack[self.stack.len() - self.index - 1].2.clone()
     }
+}
+
+pub fn parse_purr(
+    mut unparsed: String,
+    source: PurrSource,
+) -> Result<(Vec<ast::Statement>, ParseNotes), SyntaxError> {
+    todo!("Parser is not yet implemented")
 }
