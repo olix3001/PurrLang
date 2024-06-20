@@ -18,6 +18,7 @@ pub enum StatementKind {
     LetDefinition(LetDefinition),
     Trigger(Trigger),
     BlockDefinition(BlockDefinition),
+    FunctionDefinition(FunctionDefinition),
 
     Break,
     Continue,
@@ -64,6 +65,13 @@ pub struct BlockDefinition {
     pub signature: Signature,
     pub opcode: String,
     pub body: Vec<ValueField>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub signature: Signature,
+    pub body: Vec<Statement>
 }
 
 #[derive(Debug, Clone, PartialEq)]

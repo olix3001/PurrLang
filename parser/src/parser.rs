@@ -337,6 +337,21 @@ pub fn parse_statement(
         Some(Token::Block) => ast::StatementKind::BlockDefinition(
             parse_block_definition(tokens, notes)?
         ),
+
+        Some(Token::Define) => {
+            let name = expect_ident(tokens, notes)?;
+            let signature = parse_signature(tokens, notes, ast::TyKind::Void)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            ast::StatementKind::FunctionDefinition(
+                ast::FunctionDefinition {
+                    name,
+                    signature,
+                    body
+                }
+            )
+        },
+
         Some(Token::Import) => {
             let import = ast::StatementKind::Import(
                 parse_import(tokens, notes)?
@@ -998,6 +1013,18 @@ mod tests {
             "
             import hello::world;
             import lorem::ipsum::{dolor::sit::*, amet};
+            ".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_function_definition() {
+        parse_purr(
+            "
+            def move_to_postion(x: number, y: number) {
+                goto_position(x, y);
+            }
             ".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
