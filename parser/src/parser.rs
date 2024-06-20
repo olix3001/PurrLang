@@ -335,6 +335,17 @@ pub fn parse_statement(
 
         Some(Token::Block) => parse_block_definition(tokens, notes)?,
 
+        Some(Token::Module) => {
+            let name = expect_ident(tokens, notes)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            ast::StatementKind::Module(ast::ModuleDefinition {
+                name,
+                body,
+                source: notes.file.clone()
+            })
+        },
+
         Some(Token::Break) => ast::StatementKind::Break,
         Some(Token::Continue) => ast::StatementKind::Continue,
 
@@ -912,6 +923,22 @@ mod tests {
             "
             block add(a: number, b: number) -> number operator_add {
                 inputs: .{ NUM1: a, NUM2: b }
+            }
+            ".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_module_definition() {
+        parse_purr(
+            "
+            mod hello {
+                @green_flag {
+                    let a = 1;
+                    let b = 2;
+                    let c = a + b;
+                }
             }
             ".to_string(),
             PurrSource::Unknown

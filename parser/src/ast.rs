@@ -9,9 +9,7 @@ pub struct Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementKind {
-    // Module can change source files after being inlined
-    // for compilation.
-    Module(Vec<Statement>, Attributes, PurrSource),
+    Module(ModuleDefinition),
 
     Expr(Expression),
     ExprNoSemi(Expression),
@@ -22,6 +20,15 @@ pub enum StatementKind {
 
     Break,
     Continue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModuleDefinition {
+    pub name: String,
+    pub body: Vec<Statement>,
+    // Modules can be sourced from other files so that changes
+    // file context when accessing them.
+    pub source: PurrSource
 }
 
 #[derive(Debug, Clone, PartialEq)]
