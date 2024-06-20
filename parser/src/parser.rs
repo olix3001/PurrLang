@@ -333,6 +333,8 @@ pub fn parse_statement(
             })
         }
 
+        Some(Token::Block) => parse_block_definition(tokens, notes)?,
+
         Some(Token::Break) => ast::StatementKind::Break,
         Some(Token::Continue) => ast::StatementKind::Continue,
 
@@ -701,14 +703,49 @@ pub fn parse_path(
 fn parse_block_definition(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
-) -> Result<(), SyntaxError> {
-    todo!("Implement block syntax")
-    /*
-    * block move(n: number) "motion_movesteps" stack {
-    *     inputs: .{ STEPS: n },
-    *     fields: .{}
-    * }
-    */
+) -> Result<ast::StatementKind, SyntaxError> {
+    let name = expect_ident(tokens, notes)?;
+    let signature = parse_signature(tokens, notes, ast::TyKind::Ptr)?;
+    let opcode = expect_ident(tokens, notes)?;
+    let body = parse_values_struct(tokens, notes, true)?;
+
+    Ok(ast::StatementKind::BlockDefinition(
+        ast::BlockDefinition {
+            name,
+            signature,
+            opcode,
+            body
+        }
+    ))
+}
+
+fn parse_signature(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    default_return_ty: ast::TyKind
+) -> Result<ast::Signature, SyntaxError> {
+    expect(tokens, notes, Token::LParen)?;
+
+    let arguments = if !tokens.check(Token::RParen) {
+        let args = separated(tokens, notes, Token::Comma, |tokens, notes| {
+            let name = expect_ident(tokens, notes)?;
+            let start_pos = tokens.position().unwrap().start;
+            expect(tokens, notes, Token::Colon)?;
+            let ty = parse_ty(tokens, notes)?;
+            let end_pos = tokens.position().unwrap().end;
+            Ok(ast::TypeField {
+                name, ty, pos: start_pos..end_pos
+            })
+        })?;
+        expect(tokens, notes, Token::RParen)?;
+        args
+    } else { Vec::new() };
+
+    let return_type = if tokens.check(Token::Arrow) {
+        parse_ty(tokens, notes)?
+    } else { ast::Ty { kind: default_return_ty, pos: 0..0 } };
+
+    Ok(ast::Signature { arguments, return_type })
 }
 
 fn separated<T>(
@@ -865,6 +902,18 @@ mod tests {
     fn parse_parenthesised_expression() {
         parse_purr(
             "2 * (2 + 2)".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_block_definition() {
+        parse_purr(
+            "
+            block add(a: number, b: number) -> number operator_add {
+                inputs: .{ NUM1: a, NUM2: b }
+            }
+            ".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }

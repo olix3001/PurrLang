@@ -40,8 +40,15 @@ pub struct Trigger {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlockDefinition {
     pub name: String,
+    pub signature: Signature,
     pub opcode: String,
-    pub fields: Vec<ValueField>
+    pub body: Vec<ValueField>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Signature {
+    pub arguments: Vec<TypeField>,
+    pub return_type: Ty
 }
 
 #[derive(Debug, Clone, PartialEq)]
