@@ -10,6 +10,7 @@ pub struct Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementKind {
     Module(ModuleDefinition),
+    Import(ImportTree),
 
     Expr(Expression),
     ExprNoSemi(Expression),
@@ -29,6 +30,19 @@ pub struct ModuleDefinition {
     // Modules can be sourced from other files so that changes
     // file context when accessing them.
     pub source: PurrSource
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportTree {
+    pub prefix: PurrPath,
+    pub kind: ImportKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportKind {
+    Glob,
+    Name,
+    Nested(Vec<ImportTree>)
 }
 
 #[derive(Debug, Clone, PartialEq)]

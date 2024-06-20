@@ -93,6 +93,7 @@ pub enum Token {
     #[token("break")] Break,
     #[token("continue")] Continue,
     #[token("ptr")] Ptr,
+    #[token("import")] Import,
 
     // ==< Primitive types >==
     #[token("void")] Void,
@@ -130,7 +131,7 @@ impl<'src> Token {
 
             Block | Const | Let | Cloud | Global | Enum | Struct |
             Impl | For | While | Loop | If | Else | Return | Define |
-            Comptime | Match | Module | Break | Continue => "keyword",
+            Comptime | Match | Module | Break | Continue | Import => "keyword",
 
             NumberLit | HexNumberLit => "number literal",
             StringLit => "string literal",
@@ -333,7 +334,16 @@ pub fn parse_statement(
             })
         }
 
-        Some(Token::Block) => parse_block_definition(tokens, notes)?,
+        Some(Token::Block) => ast::StatementKind::BlockDefinition(
+            parse_block_definition(tokens, notes)?
+        ),
+        Some(Token::Import) => {
+            let import = ast::StatementKind::Import(
+                parse_import(tokens, notes)?
+            );
+            expect(tokens, notes, Token::Semi)?;
+            import
+        },
 
         Some(Token::Module) => {
             let name = expect_ident(tokens, notes)?;
@@ -541,7 +551,7 @@ pub fn parse_primary_expression(
     }
     
     // Path expression
-    let path = parse_path(tokens, notes)?;
+    let path = parse_path(tokens, notes, false)?;
     Ok(ast::Expression {
         pos: path.pos.clone(),
         kind: ast::ExpressionKind::Path(path),
@@ -647,7 +657,7 @@ pub fn parse_ty(
         ),
         Some(Token::Ident) => { // Path variant
             tokens.back();
-            let path = parse_path(tokens, notes)?;
+            let path = parse_path(tokens, notes, false)?;
             ast::TyKind::Path(path)
         },
         found @ Some(_) => expected!("any type".to_string(), tokens, notes, found)?,
@@ -663,7 +673,8 @@ pub fn parse_ty(
 
 pub fn parse_path(
     tokens: &mut Tokens,
-    notes: &mut ParseNotes
+    notes: &mut ParseNotes,
+    allow_trailing_dcolon: bool
 ) -> Result<ast::PurrPath, SyntaxError> {
     let mut segments = Vec::<ast::PurrPathSegment>::new();
 
@@ -701,6 +712,9 @@ pub fn parse_path(
         });
 
         if !tokens.check(Token::DColon) { break; }
+        if allow_trailing_dcolon &&
+            tokens.peek() != Some(Token::Ident)
+        { break; }
     }
 
     let end_pos = tokens.position().unwrap().end;
@@ -714,20 +728,53 @@ pub fn parse_path(
 fn parse_block_definition(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
-) -> Result<ast::StatementKind, SyntaxError> {
+) -> Result<ast::BlockDefinition, SyntaxError> {
     let name = expect_ident(tokens, notes)?;
     let signature = parse_signature(tokens, notes, ast::TyKind::Ptr)?;
     let opcode = expect_ident(tokens, notes)?;
     let body = parse_values_struct(tokens, notes, true)?;
 
-    Ok(ast::StatementKind::BlockDefinition(
-        ast::BlockDefinition {
-            name,
-            signature,
-            opcode,
-            body
-        }
-    ))
+    Ok(ast::BlockDefinition {
+        name,
+        signature,
+        opcode,
+        body
+    })
+}
+
+fn parse_import(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::ImportTree, SyntaxError> {
+    let prefix = parse_path(tokens, notes, true)?;
+    let is_current_dcolon = tokens.current() == Some(Token::DColon);
+    if !is_current_dcolon {
+        return Ok(ast::ImportTree { prefix, kind: ast::ImportKind::Name });
+    }
+
+    if tokens.check(Token::Star) {
+        return Ok(ast::ImportTree {
+            prefix,
+            kind: ast::ImportKind::Glob
+        });
+    }
+
+    expect(tokens, notes, Token::LCurly)?;
+    if tokens.check(Token::RCurly) {
+        expect(tokens, notes, Token::Semi)?;
+        return Ok(ast::ImportTree {
+            prefix,
+            kind: ast::ImportKind::Nested(Vec::new())
+        });
+    }
+
+    let subimports = separated(tokens, notes, Token::Comma, parse_import)?;
+    expect(tokens, notes, Token::RCurly)?;
+
+    return Ok(ast::ImportTree {
+        prefix,
+        kind: ast::ImportKind::Nested(subimports)
+    });
 }
 
 fn parse_signature(
@@ -940,6 +987,17 @@ mod tests {
                     let c = a + b;
                 }
             }
+            ".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_import() {
+        parse_purr(
+            "
+            import hello::world;
+            import lorem::ipsum::{dolor::sit::*, amet};
             ".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
