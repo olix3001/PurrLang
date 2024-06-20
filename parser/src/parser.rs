@@ -347,17 +347,32 @@ pub fn parse_statement(
 
         Some(Token::Define) => {
             let name = expect_ident(tokens, notes)?;
+            let generics = parse_optional_generics(tokens, notes)?;
             let signature = parse_signature(tokens, notes, ast::TyKind::Void)?;
             expect(tokens, notes, Token::LCurly)?;
             let body = parse_statements_until(tokens, notes, Token::RCurly)?;
             ast::StatementKind::FunctionDefinition(
                 ast::FunctionDefinition {
                     name,
+                    generics,
                     signature,
                     body
                 }
             )
         },
+
+        Some(Token::Struct) => {
+            let name = expect_ident(tokens, notes)?;
+            let generics = parse_optional_generics(tokens, notes)?;
+            let fields = parse_ty_struct(tokens, notes, true)?;
+            ast::StatementKind::StructDefinition(
+                ast::StructDefinition {
+                    name,
+                    generics,
+                    fields
+                }
+            )
+        }
 
         Some(Token::Import) => {
             let import = ast::StatementKind::Import(
@@ -572,8 +587,23 @@ pub fn parse_primary_expression(
         });
     }
     
-    // Path expression
+    // Path/Struct expression
     let path = parse_path(tokens, notes, false)?;
+    
+    if tokens.check(Token::LCurly) {
+        let fields = if !tokens.check(Token::RCurly) {
+            let fields = parse_values_struct(tokens, notes, false)?;
+            expect(tokens, notes, Token::RCurly)?;
+            fields
+        } else { Vec::new() };
+        let end_pos = tokens.position().unwrap().end;
+
+        return Ok(ast::Expression {
+            pos: path.pos.start..end_pos,
+            kind: ast::ExpressionKind::StructLiteral(path, fields)
+        });
+    }
+
     Ok(ast::Expression {
         pos: path.pos.clone(),
         kind: ast::ExpressionKind::Path(path),
@@ -622,6 +652,25 @@ pub fn parse_ty_struct(
     })?;
     if delimiters { expect(tokens, notes, Token::RCurly)?; }
     Ok(fields)
+}
+
+pub fn parse_optional_generics(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<Vec<ast::TypeVariable>, SyntaxError> {
+    if !tokens.check(Token::Lt) { return Ok(Vec::new()); }
+    if tokens.check(Token::Gt) { return Ok(Vec::new()); }
+
+    let arguments = separated(tokens, notes, Token::Comma, |tokens, notes| {
+        // TODO: Add constraints when traits are added.
+        let name = expect_ident(tokens, notes)?;
+        Ok(ast::TypeVariable {
+            name
+        })
+    })?;
+    expect(tokens, notes, Token::Gt)?;
+
+    Ok(arguments)
 }
 
 pub fn parse_attributes(
@@ -1037,6 +1086,31 @@ mod tests {
             def move_to_postion(x: number, y: number) {
                 goto_position(x, y);
             }
+            ".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_struct_definition() {
+        parse_purr(
+            "
+            struct Labelled<T> {
+                value: T,
+                label: text
+            }
+            ".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_struct_literal() {
+        parse_purr(
+            "
+            let position = Vec2 {
+                x: 1, y: 2
+            };
             ".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine

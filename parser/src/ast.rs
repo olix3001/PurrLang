@@ -19,6 +19,7 @@ pub enum StatementKind {
     Trigger(Trigger),
     BlockDefinition(BlockDefinition),
     FunctionDefinition(FunctionDefinition),
+    StructDefinition(StructDefinition),
 
     Break,
     Continue,
@@ -71,8 +72,22 @@ pub struct BlockDefinition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefinition {
     pub name: String,
+    pub generics: Vec<TypeVariable>,
     pub signature: Signature,
     pub body: Vec<Statement>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructDefinition {
+    pub name: String,
+    pub generics: Vec<TypeVariable>,
+    pub fields: Vec<TypeField>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeVariable {
+    pub name: String,
+    // TODO: Add constraints when traits are added.
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -112,6 +127,8 @@ pub enum ExpressionKind {
 
     Field(Box<Expression>, String),
     Call(Box<Expression>, Vec<Expression>),
+
+    StructLiteral(PurrPath, Vec<ValueField>),
 
     Number(f64),
     String(String),
