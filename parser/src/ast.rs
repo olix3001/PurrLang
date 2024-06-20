@@ -18,6 +18,7 @@ pub enum StatementKind {
 
     LetDefinition(LetDefinition),
     Trigger(Trigger),
+    BlockDefinition(BlockDefinition),
 
     Break,
     Continue,
@@ -33,8 +34,38 @@ pub struct LetDefinition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trigger {
     pub name: String,
-    pub pos: FileRange,
     pub body: Vec<Statement>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockDefinition {
+    pub name: String,
+    pub opcode: String,
+    pub kind: BlockKind,
+    pub fields: Vec<ValueField>
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValueField {
+    pub name: String,
+    pub value: Expression,
+    pub pos: FileRange
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeField {
+    pub name: String,
+    pub ty: Ty,
+    pub pos: FileRange
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub enum BlockKind {
+    #[default]
+    Stack,
+    CMouth,
+    Angle,
+    Rounded
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,7 +76,8 @@ pub struct Expression {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionKind {
-
+    AnonStruct(Vec<ValueField>),
+    Path(PurrPath),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

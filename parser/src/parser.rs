@@ -323,7 +323,55 @@ pub fn parse_expression(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
 ) -> Result<ast::Expression, SyntaxError> {
-    unimplemented!("Expressions are not implemented yet")
+    parse_primary_expression(tokens, notes)
+}
+
+pub fn parse_primary_expression(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Expression, SyntaxError> {
+    // Anonymous struct
+    if tokens.check(Token::Period) && tokens.check(Token::LCurly) {
+        let start_pos = tokens.position().unwrap().start;
+        let struct_ = parse_values_struct(tokens, notes, false)?;
+        expect(tokens, notes, Token::RCurly)?;
+        let end_pos = tokens.position().unwrap().start;
+        return Ok(ast::Expression {
+            kind: ast::ExpressionKind::AnonStruct(struct_),
+            pos: start_pos..end_pos
+        });
+    }
+
+    // TODO: Literals
+    
+    // Path expression
+    let path = parse_path(tokens, notes)?;
+    Ok(ast::Expression {
+        pos: path.pos.clone(),
+        kind: ast::ExpressionKind::Path(path),
+    })
+}
+
+pub fn parse_values_struct(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    delimiters: bool
+) -> Result<Vec<ast::ValueField>, SyntaxError> {
+    if delimiters { expect(tokens, notes, Token::LCurly)?; }
+    let fields = separated(tokens, notes, Token::Comma, |tokens, notes| {
+        let name = expect_ident(tokens, notes)?;
+        let start_pos = tokens.position().unwrap().start;
+        expect(tokens, notes, Token::Colon)?;
+        let value = parse_expression(tokens, notes)?;
+        let end_pos = tokens.position().unwrap().end;
+        Ok(ast::ValueField {
+            name,
+            value,
+            pos: start_pos..end_pos
+        })
+    })?;
+    if delimiters { expect(tokens, notes, Token::RCurly)?; }
+    Ok(fields)
 }
 
 pub fn parse_attributes(
@@ -441,6 +489,19 @@ pub fn parse_path(
     })
 }
 
+fn parse_block_definition(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<(), SyntaxError> {
+    todo!("Implement block syntax")
+    /*
+    * block move(n: number) "motion_movesteps" stack {
+    *     inputs: .{ STEPS: n },
+    *     fields: .{}
+    * }
+    */
+}
+
 fn separated<T>(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
@@ -516,6 +577,25 @@ mod tests {
     fn parse_let_without_value() {
         parse_purr(
             "let hello_world: Lorem<Ipsum>::Dolor;".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_let_with_expr() {
+        parse_purr(
+            "let hello: number; let world = hello;".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_anon_struct() {
+        parse_purr(
+            "let hello = .{
+                a: lorem,
+                b: ipsum
+            };".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
