@@ -393,8 +393,26 @@ pub fn parse_statement(
             })
         },
 
-        Some(Token::Break) => ast::StatementKind::Break,
-        Some(Token::Continue) => ast::StatementKind::Continue,
+        Some(Token::Return) => {
+            if tokens.check(Token::Semi) { ast::StatementKind::Return(None) }
+            else {
+                let kind = ast::StatementKind::Return(
+                    Some(parse_expression(tokens, notes)?)
+                );
+                expect(tokens, notes, Token::Semi)?;
+                kind
+            }
+        }
+        Some(Token::Break) => {
+            let kind = ast::StatementKind::Break;
+            expect(tokens, notes, Token::Semi)?;
+            kind
+        },
+        Some(Token::Continue) => {
+            let kind = ast::StatementKind::Continue;
+            expect(tokens, notes, Token::Semi)?;
+            kind
+        },
 
         Some(_) => {
             tokens.back();
@@ -1112,6 +1130,14 @@ mod tests {
                 x: 1, y: 2
             };
             ".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_terminal_keywords() {
+        parse_purr(
+            "break;continue;return;return 1;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }

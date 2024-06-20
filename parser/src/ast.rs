@@ -21,6 +21,7 @@ pub enum StatementKind {
     FunctionDefinition(FunctionDefinition),
     StructDefinition(StructDefinition),
 
+    Return(Option<Expression>),
     Break,
     Continue,
 }
