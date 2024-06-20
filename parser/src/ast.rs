@@ -41,7 +41,6 @@ pub struct Trigger {
 pub struct BlockDefinition {
     pub name: String,
     pub opcode: String,
-    pub kind: BlockKind,
     pub fields: Vec<ValueField>
 }
 
@@ -57,15 +56,6 @@ pub struct TypeField {
     pub name: String,
     pub ty: Ty,
     pub pos: FileRange
-}
-
-#[derive(Default, Debug, Clone, PartialEq)]
-pub enum BlockKind {
-    #[default]
-    Stack,
-    CMouth,
-    Angle,
-    Rounded
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -126,10 +116,12 @@ pub enum TyKind {
     Never,
     Infer,
     Void,
+    Ptr,
 
     Number,
     Text,
 
+    AnonStruct(Vec<TypeField>),
     Path(PurrPath)
 }
 

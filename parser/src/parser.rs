@@ -92,6 +92,7 @@ pub enum Token {
     #[token("mod")] Module,
     #[token("break")] Break,
     #[token("continue")] Continue,
+    #[token("ptr")] Ptr,
 
     // ==< Primitive types >==
     #[token("void")] Void,
@@ -135,7 +136,7 @@ impl<'src> Token {
             StringLit => "string literal",
             True | False => "boolean literal",
 
-            Void | Number | Text => "type"
+            Void | Number | Text | Ptr => "type",
         }
     }
 }
@@ -556,6 +557,28 @@ pub fn parse_values_struct(
     Ok(fields)
 }
 
+pub fn parse_ty_struct(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    delimiters: bool
+) -> Result<Vec<ast::TypeField>, SyntaxError> {
+    if delimiters { expect(tokens, notes, Token::LCurly)?; }
+    let fields = separated(tokens, notes, Token::Comma, |tokens, notes| {
+        let name = expect_ident(tokens, notes)?;
+        let start_pos = tokens.position().unwrap().start;
+        expect(tokens, notes, Token::Colon)?;
+        let ty = parse_ty(tokens, notes)?;
+        let end_pos = tokens.position().unwrap().end;
+        Ok(ast::TypeField {
+            name,
+            ty,
+            pos: start_pos..end_pos
+        })
+    })?;
+    if delimiters { expect(tokens, notes, Token::RCurly)?; }
+    Ok(fields)
+}
+
 pub fn parse_attributes(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
@@ -605,6 +628,10 @@ pub fn parse_ty(
         Some(Token::Number) => ast::TyKind::Number,
         Some(Token::Text) => ast::TyKind::Text,
         Some(Token::Bang) => ast::TyKind::Never,
+        Some(Token::Ptr) => ast::TyKind::Ptr,
+        Some(Token::Period) => ast::TyKind::AnonStruct(
+            parse_ty_struct(tokens, notes, true)?
+        ),
         Some(Token::Ident) => { // Path variant
             tokens.back();
             let path = parse_path(tokens, notes)?;
@@ -783,10 +810,10 @@ mod tests {
     #[test]
     fn parse_anon_struct() {
         parse_purr(
-            ".{
-                a: lorem,
-                b: ipsum
-            }".to_string(),
+            "let hello: .{ a: number, b: text } = .{
+                a: 1,
+                b: \"Hello\"
+            };".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
