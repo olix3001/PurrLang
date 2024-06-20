@@ -1,10 +1,25 @@
+use std::sync::atomic::AtomicU64;
+
 use common::{FileRange, PurrSource};
+
+static NODE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct NodeId(u64);
+
+impl NodeId {
+    pub fn next() -> Self {
+        Self(NODE_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Statement {
     pub kind: StatementKind,
     pub pos: FileRange,
-    pub attributes: Attributes
+    pub attributes: Attributes,
+    pub id: NodeId
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -101,20 +116,23 @@ pub struct Signature {
 pub struct ValueField {
     pub name: String,
     pub value: Expression,
-    pub pos: FileRange
+    pub pos: FileRange,
+    pub id: NodeId
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeField {
     pub name: String,
     pub ty: Ty,
-    pub pos: FileRange
+    pub pos: FileRange,
+    pub id: NodeId
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
     pub kind: ExpressionKind,
     pub pos: FileRange,
+    pub id: NodeId
 }
 
 #[derive(Debug, Clone, PartialEq)]

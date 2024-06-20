@@ -2,7 +2,7 @@ use error::SyntaxError;
 use logos::{Logos, Lexer};
 use common::{FileRange, PurrSource};
 
-use crate::ast;
+use crate::ast::{self, NodeId};
 
 macro_rules! expected {
     ($expected:expr, $tokens:expr, $notes:expr, $a:expr) => {
@@ -431,6 +431,7 @@ pub fn parse_statement(
         kind,
         attributes,
         pos: start_pos..end_pos,
+        id: NodeId::next()
     })
 }
 
@@ -464,7 +465,8 @@ macro_rules! impl_binary_expressions {
                             kind,
                             Box::new(rhs)
                         ),
-                        pos
+                        pos,
+                        id: NodeId::next()
                     }
                 }
 
@@ -503,7 +505,8 @@ pub fn parse_unary_expression(
         let end_pos = tokens.position().unwrap().end;
         Ok(ast::Expression {
             kind: ast::ExpressionKind::Unary(ast::UnaryOp::Not, Box::new(rhs)),
-            pos: start_pos..end_pos
+            pos: start_pos..end_pos,
+            id: NodeId::next()
         })
     } else if tokens.check(Token::Minus) {
         let start_pos = tokens.position().unwrap().start;
@@ -511,7 +514,8 @@ pub fn parse_unary_expression(
         let end_pos = tokens.position().unwrap().end;
         Ok(ast::Expression {
             kind: ast::ExpressionKind::Unary(ast::UnaryOp::Neg, Box::new(rhs)),
-            pos: start_pos..end_pos
+            pos: start_pos..end_pos,
+            id: NodeId::next()
         })
     } else { parse_expression_call_or_field(tokens, notes) }
 }
@@ -530,6 +534,7 @@ pub fn parse_expression_call_or_field(
                 subject = ast::Expression {
                     pos: subject.pos.start..end_pos,
                     kind: ast::ExpressionKind::Field(Box::new(subject), field_name),
+                    id: NodeId::next()
                 };
             },
             Some(Token::LParen) => {
@@ -540,7 +545,8 @@ pub fn parse_expression_call_or_field(
                 let end_pos = tokens.position().unwrap().end;
                 subject = ast::Expression {
                     pos: subject.pos.start..end_pos,
-                    kind: ast::ExpressionKind::Call(Box::new(subject), arguments)
+                    kind: ast::ExpressionKind::Call(Box::new(subject), arguments),
+                    id: NodeId::next()
                 };
             },
             Some(_) | None => break
@@ -569,7 +575,8 @@ pub fn parse_primary_expression(
         let end_pos = tokens.position().unwrap().start;
         return Ok(ast::Expression {
             kind: ast::ExpressionKind::AnonStruct(struct_),
-            pos: start_pos..end_pos
+            pos: start_pos..end_pos,
+            id: NodeId::next()
         });
     }
 
@@ -601,7 +608,8 @@ pub fn parse_primary_expression(
     if let Some(value) = value {
         return Ok(ast::Expression {
             pos: tokens.position().unwrap().clone(),
-            kind: value
+            kind: value,
+            id: NodeId::next()
         });
     }
     
@@ -618,13 +626,15 @@ pub fn parse_primary_expression(
 
         return Ok(ast::Expression {
             pos: path.pos.start..end_pos,
-            kind: ast::ExpressionKind::StructLiteral(path, fields)
+            kind: ast::ExpressionKind::StructLiteral(path, fields),
+            id: NodeId::next()
         });
     }
 
     Ok(ast::Expression {
         pos: path.pos.clone(),
         kind: ast::ExpressionKind::Path(path),
+        id: NodeId::next()
     })
 }
 
@@ -643,7 +653,8 @@ pub fn parse_values_struct(
         Ok(ast::ValueField {
             name,
             value,
-            pos: start_pos..end_pos
+            pos: start_pos..end_pos,
+            id: NodeId::next()
         })
     })?;
     if delimiters { expect(tokens, notes, Token::RCurly)?; }
@@ -665,7 +676,8 @@ pub fn parse_ty_struct(
         Ok(ast::TypeField {
             name,
             ty,
-            pos: start_pos..end_pos
+            pos: start_pos..end_pos,
+            id: NodeId::next()
         })
     })?;
     if delimiters { expect(tokens, notes, Token::RCurly)?; }
@@ -881,7 +893,8 @@ fn parse_signature(
             let ty = parse_ty(tokens, notes)?;
             let end_pos = tokens.position().unwrap().end;
             Ok(ast::TypeField {
-                name, ty, pos: start_pos..end_pos
+                name, ty, pos: start_pos..end_pos,
+                id: NodeId::next()
             })
         })?;
         expect(tokens, notes, Token::RParen)?;
