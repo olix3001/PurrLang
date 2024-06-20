@@ -78,6 +78,10 @@ pub struct Expression {
 pub enum ExpressionKind {
     AnonStruct(Vec<ValueField>),
     Path(PurrPath),
+
+    Number(f64),
+    String(String),
+    Bool(bool)
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

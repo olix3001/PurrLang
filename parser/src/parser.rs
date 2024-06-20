@@ -106,7 +106,7 @@ pub enum Token {
     #[regex(r"0x[a-fA-F0-9][_a-fA-F0-9]*")]
     HexNumberLit,
     #[regex(r#"[a-z0-9]*("(?:\\.|[^\\"])*"|'(?:\\.|[^\\'])*')"#)]
-    StringLiteral,
+    StringLit,
 
     #[token("true")]  True,
     #[token("false")] False,
@@ -132,7 +132,7 @@ impl<'src> Token {
             Comptime | Match | Module | Break | Continue => "keyword",
 
             NumberLit | HexNumberLit => "number literal",
-            StringLiteral => "string literal",
+            StringLit => "string literal",
             True | False => "boolean literal",
 
             Void | Number | Text => "type"
@@ -264,6 +264,25 @@ pub fn parse_purr(
     Ok((statements, notes))
 }
 
+pub fn parse_statements_until(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    end: Token
+) -> Result<Vec<ast::Statement>, SyntaxError> {
+    let mut statements = Vec::<ast::Statement>::new();
+
+    loop {
+        if tokens.check(end) { break; }
+        match tokens.peek() {
+            Some(_) => 
+                statements.push(parse_statement(tokens, notes)?),
+            None => { expect(tokens, notes, end)?; },
+        }
+    }
+
+    Ok(statements)
+}
+
 pub fn parse_statement(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
@@ -276,7 +295,6 @@ pub fn parse_statement(
         Some(Token::Let) => {
             // Let definition statement.
             // This handles local variable creation.
-            
             let name = expect_ident(tokens, notes)?;
 
             let ty = if tokens.check(Token::Colon) {
@@ -304,10 +322,28 @@ pub fn parse_statement(
             )
         }
 
+        Some(Token::At) => {
+            // Triggers
+            let name = expect_ident(tokens, notes)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            ast::StatementKind::Trigger(ast::Trigger {
+                name, body
+            })
+        }
+
         Some(Token::Break) => ast::StatementKind::Break,
         Some(Token::Continue) => ast::StatementKind::Continue,
 
-        Some(_) => { todo!("Parse expression/definition") },
+        Some(_) => {
+            tokens.back();
+            let expression = parse_expression(tokens, notes)?;
+            if tokens.check(Token::Semi) {
+                ast::StatementKind::Expr(expression)
+            } else {
+                ast::StatementKind::ExprNoSemi(expression)
+            }
+        },
         None => expected!("statement".to_string(), tokens, notes, first)?,
     };
 
@@ -342,7 +378,37 @@ pub fn parse_primary_expression(
         });
     }
 
-    // TODO: Literals
+    // Literals
+    let literal_value = tokens.next();
+    let value = match literal_value {
+        Some(Token::NumberLit) =>
+            Some(ast::ExpressionKind::Number(
+                tokens.text().unwrap().parse().unwrap()
+            )),
+        Some(Token::HexNumberLit) =>
+            Some(ast::ExpressionKind::Number(
+                i64::from_str_radix(
+                    &tokens.text().unwrap()[2..],
+                    16
+                ).unwrap() as _
+            )),
+        Some(Token::StringLit) =>
+            Some(ast::ExpressionKind::String(
+                text_literal_to_string(
+                    tokens.text().unwrap()
+                )
+            )),
+        Some(Token::True) => Some(ast::ExpressionKind::Bool(true)),
+        Some(Token::False) => Some(ast::ExpressionKind::Bool(false)),
+        Some(_) | None => { tokens.back(); None }
+    };
+
+    if let Some(value) = value {
+        return Ok(ast::Expression {
+            pos: tokens.position().unwrap().clone(),
+            kind: value
+        });
+    }
     
     // Path expression
     let path = parse_path(tokens, notes)?;
@@ -544,6 +610,12 @@ fn expect_ident(
     Ok(tokens.text().unwrap().to_string())
 }
 
+fn text_literal_to_string(value: &str) -> String {
+    if value.len() == 2 { return "".to_string() } // Empty string.
+    // TODO: Replace escape characters
+    value[1..value.len()-1].to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use common::PurrSource;
@@ -592,10 +664,29 @@ mod tests {
     #[test]
     fn parse_anon_struct() {
         parse_purr(
-            "let hello = .{
+            ".{
                 a: lorem,
                 b: ipsum
-            };".to_string(),
+            }".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_trigger() {
+        parse_purr(
+            "@green_flag {
+                let a: number;
+                let b: number = a;
+            }".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_literals() {
+        parse_purr(
+            "1;2;3;4.2;123.456;0xef;\"Hello world\";true;false;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
