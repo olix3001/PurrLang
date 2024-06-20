@@ -327,10 +327,17 @@ pub fn parse_statement(
         Some(Token::At) => {
             // Triggers
             let name = expect_ident(tokens, notes)?;
+            let arguments = if tokens.check(Token::LParen) {
+                if !tokens.check(Token::RParen) {
+                    let args = separated(tokens, notes, Token::Comma, parse_expression)?;
+                    expect(tokens, notes, Token::RParen)?;
+                    args
+                } else { Vec::new() }
+            } else { Vec::new() };
             expect(tokens, notes, Token::LCurly)?;
             let body = parse_statements_until(tokens, notes, Token::RCurly)?;
             ast::StatementKind::Trigger(ast::Trigger {
-                name, body
+                name, body, arguments
             })
         }
 
@@ -931,10 +938,15 @@ mod tests {
     #[test]
     fn parse_trigger() {
         parse_purr(
-            "@green_flag {
+            "
+            @green_flag {
                 let a: number;
                 let b: number = a;
-            }".to_string(),
+            }
+            @key_pressed(\"space\") {
+                let n = 1;
+            }
+            ".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }

@@ -56,7 +56,8 @@ pub struct LetDefinition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trigger {
     pub name: String,
-    pub body: Vec<Statement>
+    pub body: Vec<Statement>,
+    pub arguments: Vec<Expression>
 }
 
 #[derive(Debug, Clone, PartialEq)]
