@@ -79,9 +79,30 @@ pub enum ExpressionKind {
     AnonStruct(Vec<ValueField>),
     Path(PurrPath),
 
+    Unary(UnaryOp, Box<Expression>),
+    Binary(Box<Expression>, BinaryOp, Box<Expression>),
+    Paren(Box<Expression>),
+
+    Field(Box<Expression>, String),
+    Call(Box<Expression>, Vec<Expression>),
+
     Number(f64),
     String(String),
     Bool(bool)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Neg,
+    Not
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add, Sub, Mul, Div,
+    Mod, Pow, And, Or,
+    Eq, Ne, Gt, Ge,
+    Lt, Le
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

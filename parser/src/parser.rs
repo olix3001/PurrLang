@@ -192,10 +192,10 @@ impl<'src> Tokens<'src> {
         }
     }
 
-    fn previous(&mut self) -> Option<Token> {
+    fn current(&mut self) -> Option<Token> {
         if self.index < 1 { return None; }
-        self.index -= 1;
-        self.next()
+        if self.index-1 > self.stack.len() { return None; }
+        self.stack[self.index-1].0
     }
 
     fn back(&mut self) -> bool {
@@ -359,13 +359,129 @@ pub fn parse_expression(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
 ) -> Result<ast::Expression, SyntaxError> {
-    parse_primary_expression(tokens, notes)
+    parse_binary_expression_or(tokens, notes)
+}
+
+macro_rules! impl_binary_expressions {
+    ($($name:ident use $fun:ident where $($kind:ident => $ty:ident),+);+;) => {
+        $(
+            pub fn $name(
+                tokens: &mut Tokens,
+                notes: &mut ParseNotes
+            ) -> Result<ast::Expression, SyntaxError> {
+                let mut lhs = $fun(tokens, notes)?;
+                
+                while $(tokens.check(Token::$kind))||* {
+                    let op = tokens.current().unwrap();
+                    let kind = match op {
+                        $(Token::$kind => ast::BinaryOp::$ty),+,
+                        _ => { unreachable!() }
+                    };
+                    let rhs = $fun(tokens, notes)?;
+                    let pos = lhs.pos.start..rhs.pos.end;
+                    lhs = ast::Expression {
+                        kind: ast::ExpressionKind::Binary(
+                            Box::new(lhs),
+                            kind,
+                            Box::new(rhs)
+                        ),
+                        pos
+                    }
+                }
+
+                Ok(lhs)
+            }
+        )+
+    };
+}
+
+impl_binary_expressions! {
+    parse_binary_expression_or use parse_binary_expression_and
+        where Or => Or;
+    parse_binary_expression_and use parse_binary_expression_equality
+        where And => And;
+    parse_binary_expression_equality use parse_binary_expression_comparison 
+        where Eq => Eq, Ne => Ne;
+    parse_binary_expression_comparison use parse_binary_expression_term 
+        where Gt => Gt, Ge => Ge, Lt => Lt, Le => Le;
+    parse_binary_expression_term use parse_binary_expression_mod
+        where Plus => Add, Minus => Sub;
+    parse_binary_expression_mod use parse_binary_expression_factor
+        where Percent => Mod;
+    parse_binary_expression_factor use parse_binary_expression_pow
+        where Slash => Div, Star => Mul;
+    parse_binary_expression_pow use parse_unary_expression
+        where Hat => Pow;
+}
+
+pub fn parse_unary_expression(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Expression, SyntaxError> {
+    if tokens.check(Token::Bang) {
+        let start_pos = tokens.position().unwrap().start;
+        let rhs = parse_unary_expression(tokens, notes)?;
+        let end_pos = tokens.position().unwrap().end;
+        Ok(ast::Expression {
+            kind: ast::ExpressionKind::Unary(ast::UnaryOp::Not, Box::new(rhs)),
+            pos: start_pos..end_pos
+        })
+    } else if tokens.check(Token::Minus) {
+        let start_pos = tokens.position().unwrap().start;
+        let rhs = parse_unary_expression(tokens, notes)?;
+        let end_pos = tokens.position().unwrap().end;
+        Ok(ast::Expression {
+            kind: ast::ExpressionKind::Unary(ast::UnaryOp::Neg, Box::new(rhs)),
+            pos: start_pos..end_pos
+        })
+    } else { parse_expression_call_or_field(tokens, notes) }
+}
+
+pub fn parse_expression_call_or_field(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Expression, SyntaxError> {
+    let mut subject = parse_primary_expression(tokens, notes)?;
+
+    while tokens.check(Token::Period) || tokens.check(Token::LParen) {
+        match tokens.current() {
+            Some(Token::Period) => {
+                let field_name = expect_ident(tokens, notes)?;
+                let end_pos = tokens.position().unwrap().end;
+                subject = ast::Expression {
+                    pos: subject.pos.start..end_pos,
+                    kind: ast::ExpressionKind::Field(Box::new(subject), field_name),
+                };
+            },
+            Some(Token::LParen) => {
+                let arguments = if tokens.peek() != Some(Token::RParen) {
+                    separated(tokens, notes, Token::Comma, parse_expression)?
+                } else { Vec::new() };
+                expect(tokens, notes, Token::RParen)?;
+                let end_pos = tokens.position().unwrap().end;
+                subject = ast::Expression {
+                    pos: subject.pos.start..end_pos,
+                    kind: ast::ExpressionKind::Call(Box::new(subject), arguments)
+                };
+            },
+            Some(_) | None => break
+        }
+    }
+
+    Ok(subject)
 }
 
 pub fn parse_primary_expression(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
 ) -> Result<ast::Expression, SyntaxError> {
+    // Parenthesised expression
+    if tokens.check(Token::LParen) {
+        let expr = parse_expression(tokens, notes)?;
+        expect(tokens, notes, Token::RParen)?;
+        return Ok(expr);
+    }
+
     // Anonymous struct
     if tokens.check(Token::Period) && tokens.check(Token::LCurly) {
         let start_pos = tokens.position().unwrap().start;
@@ -618,6 +734,9 @@ fn text_literal_to_string(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    // Those tests mostly check only whether given syntax parses or not,
+    // and DO NOT check whether output is correct.
+    // Checking correctness of the output is on TODO list.
     use common::PurrSource;
 
     use crate::{ast, parser::ParseNotes};
@@ -687,6 +806,38 @@ mod tests {
     fn parse_literals() {
         parse_purr(
             "1;2;3;4.2;123.456;0xef;\"Hello world\";true;false;".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_unary_expression() {
+        parse_purr(
+            "-128;!true".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_binary_expression() {
+        parse_purr(
+            "1 + 4%2 - 5*6^7 > 10 && 1 == 2/2".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_call_and_field() {
+        parse_purr(
+            "hello.world().my.result(lorem, ipsum)(1, 2, true)".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_parenthesised_expression() {
+        parse_purr(
+            "2 * (2 + 2)".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
