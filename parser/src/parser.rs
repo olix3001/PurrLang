@@ -802,6 +802,16 @@ pub fn parse_ty(
             let path = parse_path(tokens, notes, false)?;
             ast::TyKind::Path(path)
         },
+        Some(Token::LParen) => {
+            let arguments = if !tokens.check(Token::RParen) {
+                let args = separated(tokens, notes, Token::Comma, parse_ty)?;
+                expect(tokens, notes, Token::RParen)?;
+                args
+            } else { Vec::new() };
+            expect(tokens, notes, Token::ThickArrow)?;
+            let return_type = parse_ty(tokens, notes)?;
+            ast::TyKind::Function(arguments, Box::new(return_type))
+        }
         found @ Some(_) => expected!("any type".to_string(), tokens, notes, found)?,
         None => expected!("any type".to_string(), tokens, notes, None::<Token>)?,
     };
@@ -1079,6 +1089,14 @@ mod tests {
                 a: 1,
                 b: \"Hello\"
             };".to_string(),
+            PurrSource::Unknown
+        ).unwrap(); // If It does not panic then should be fine
+    }
+
+    #[test]
+    fn parse_function_type_argument() {
+        parse_purr_statements(
+            "let hello: (number, text) => void;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }

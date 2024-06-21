@@ -207,7 +207,8 @@ pub enum TyKind {
     Text,
 
     AnonStruct(Vec<TypeField>),
-    Path(PurrPath)
+    Path(PurrPath),
+    Function(Vec<Ty>, Box<Ty>)
 }
 
 #[derive(Debug, Clone, PartialEq)]
