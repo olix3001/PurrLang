@@ -9,6 +9,10 @@ static NODE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 pub struct NodeId(u64);
 
 impl NodeId {
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+
     pub fn next() -> Self {
         Self(NODE_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     }

@@ -685,6 +685,9 @@ pub fn parse_values_struct(
     delimiters: bool
 ) -> Result<Vec<ast::ValueField>, SyntaxError> {
     if delimiters { expect(tokens, notes, Token::LCurly)?; }
+    if delimiters && tokens.check(Token::RCurly) {
+        return Ok(Vec::new());
+    }
     let fields = separated(tokens, notes, Token::Comma, |tokens, notes| {
         let name = expect_ident(tokens, notes)?;
         let start_pos = tokens.position().unwrap().start;
@@ -708,6 +711,9 @@ pub fn parse_ty_struct(
     delimiters: bool
 ) -> Result<Vec<ast::TypeField>, SyntaxError> {
     if delimiters { expect(tokens, notes, Token::LCurly)?; }
+    if delimiters && tokens.check(Token::RCurly) {
+        return Ok(Vec::new());
+    }
     let fields = separated(tokens, notes, Token::Comma, |tokens, notes| {
         let name = expect_ident(tokens, notes)?;
         let start_pos = tokens.position().unwrap().start;
@@ -1216,6 +1222,7 @@ mod tests {
                 value: T,
                 label: text
             }
+            struct Hello {}
             ".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
