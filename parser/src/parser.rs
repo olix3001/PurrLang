@@ -244,11 +244,11 @@ impl<'src> Tokens<'src> {
 pub fn parse_purr(
     unparsed: String,
     source: PurrSource,
-) -> Result<(Vec<ast::Statement>, ParseNotes), SyntaxError> {
+) -> Result<(Vec<ast::Item>, ParseNotes), SyntaxError> {
     // Initialize basic structures.
     let tokens_iter = Token::lexer(&unparsed);
     let mut tokens = Tokens::new(tokens_iter);
-    let mut statements = Vec::<ast::Statement>::new();
+    let mut items = Vec::<ast::Item>::new();
     let mut notes = ParseNotes::new(source);
 
     notes.attributes = parse_attributes(&mut tokens, &mut notes, true)?;
@@ -256,14 +256,123 @@ pub fn parse_purr(
     loop {
         match tokens.peek() {
             Some(_) =>
-                statements.push(
-                    parse_statement(&mut tokens, &mut notes)?
+                items.push(
+                    parse_item(&mut tokens, &mut notes)?
                 ),
             None => break,
         }
     }
 
-    Ok((statements, notes))
+    Ok((items, notes))
+}
+
+pub fn parse_item(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Item, SyntaxError> {
+    let attributes = parse_attributes(tokens, notes, false)?;
+
+    let first = tokens.next();
+    let start_pos = tokens.position().unwrap().start;
+    let kind: ast::ItemKind = match first {
+        Some(Token::At) => {
+            // Triggers
+            let name = expect_ident(tokens, notes)?;
+            let arguments = if tokens.check(Token::LParen) {
+                if !tokens.check(Token::RParen) {
+                    let args = separated(tokens, notes, Token::Comma, parse_expression)?;
+                    expect(tokens, notes, Token::RParen)?;
+                    args
+                } else { Vec::new() }
+            } else { Vec::new() };
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            ast::ItemKind::Trigger(ast::Trigger {
+                name, body, arguments
+            })
+        }
+
+        Some(Token::Block) => ast::ItemKind::BlockDefinition(
+            parse_block_definition(tokens, notes)?
+        ),
+
+        Some(Token::Define) => {
+            let name = expect_ident(tokens, notes)?;
+            let generics = parse_optional_generics(tokens, notes)?;
+            let signature = parse_signature(tokens, notes, ast::TyKind::Void)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            ast::ItemKind::FunctionDefinition(
+                ast::FunctionDefinition {
+                    name,
+                    generics,
+                    signature,
+                    body
+                }
+            )
+        },
+
+        Some(Token::Struct) => {
+            let name = expect_ident(tokens, notes)?;
+            let generics = parse_optional_generics(tokens, notes)?;
+            let fields = parse_ty_struct(tokens, notes, true)?;
+            ast::ItemKind::StructDefinition(
+                ast::StructDefinition {
+                    name,
+                    generics,
+                    fields
+                }
+            )
+        }
+
+        Some(Token::Import) => {
+            let import = ast::ItemKind::Import(
+                parse_import(tokens, notes)?
+            );
+            expect(tokens, notes, Token::Semi)?;
+            import
+        },
+
+        Some(Token::Module) => {
+            let name = expect_ident(tokens, notes)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_items_until(tokens, notes, Token::RCurly)?;
+            ast::ItemKind::Module(ast::ModuleDefinition {
+                name,
+                body,
+                source: notes.file.clone()
+            })
+        },
+
+        Some(_) | None => expected!("item".to_string(), tokens, notes, first)?,
+    };
+
+    let end_pos = tokens.position().unwrap().end;
+    Ok(ast::Item {
+        kind,
+        attributes,
+        pos: start_pos..end_pos,
+        id: NodeId::next()
+    })
+}
+
+pub fn parse_items_until(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes,
+    end: Token
+) -> Result<Vec<ast::Item>, SyntaxError> {
+    let mut items = Vec::<ast::Item>::new();
+
+    loop {
+        if tokens.check(end) { break; }
+        match tokens.peek() {
+            Some(_) => 
+                items.push(parse_item(tokens, notes)?),
+            None => { expect(tokens, notes, end)?; },
+        }
+    }
+
+    Ok(items)
 }
 
 pub fn parse_statements_until(
@@ -324,74 +433,6 @@ pub fn parse_statement(
             )
         }
 
-        Some(Token::At) => {
-            // Triggers
-            let name = expect_ident(tokens, notes)?;
-            let arguments = if tokens.check(Token::LParen) {
-                if !tokens.check(Token::RParen) {
-                    let args = separated(tokens, notes, Token::Comma, parse_expression)?;
-                    expect(tokens, notes, Token::RParen)?;
-                    args
-                } else { Vec::new() }
-            } else { Vec::new() };
-            expect(tokens, notes, Token::LCurly)?;
-            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
-            ast::StatementKind::Trigger(ast::Trigger {
-                name, body, arguments
-            })
-        }
-
-        Some(Token::Block) => ast::StatementKind::BlockDefinition(
-            parse_block_definition(tokens, notes)?
-        ),
-
-        Some(Token::Define) => {
-            let name = expect_ident(tokens, notes)?;
-            let generics = parse_optional_generics(tokens, notes)?;
-            let signature = parse_signature(tokens, notes, ast::TyKind::Void)?;
-            expect(tokens, notes, Token::LCurly)?;
-            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
-            ast::StatementKind::FunctionDefinition(
-                ast::FunctionDefinition {
-                    name,
-                    generics,
-                    signature,
-                    body
-                }
-            )
-        },
-
-        Some(Token::Struct) => {
-            let name = expect_ident(tokens, notes)?;
-            let generics = parse_optional_generics(tokens, notes)?;
-            let fields = parse_ty_struct(tokens, notes, true)?;
-            ast::StatementKind::StructDefinition(
-                ast::StructDefinition {
-                    name,
-                    generics,
-                    fields
-                }
-            )
-        }
-
-        Some(Token::Import) => {
-            let import = ast::StatementKind::Import(
-                parse_import(tokens, notes)?
-            );
-            expect(tokens, notes, Token::Semi)?;
-            import
-        },
-
-        Some(Token::Module) => {
-            let name = expect_ident(tokens, notes)?;
-            expect(tokens, notes, Token::LCurly)?;
-            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
-            ast::StatementKind::Module(ast::ModuleDefinition {
-                name,
-                body,
-                source: notes.file.clone()
-            })
-        },
 
         Some(Token::Return) => {
             if tokens.check(Token::Semi) { ast::StatementKind::Return(None) }
@@ -962,10 +1003,37 @@ mod tests {
     // and DO NOT check whether output is correct.
     // Checking correctness of the output is on TODO list.
     use common::PurrSource;
+    use error::SyntaxError;
+    use logos::Logos;
 
     use crate::{ast, parser::ParseNotes};
 
-    use super::parse_purr;
+    use super::{parse_purr, parse_statement, Token, Tokens};
+
+    /// This function makes It easier to parse simple statements
+    /// for unit test purposes.
+    pub fn parse_purr_statements(
+        unparsed: String,
+        source: PurrSource,
+    ) -> Result<(Vec<ast::Statement>, ParseNotes), SyntaxError> {
+        // Initialize basic structures.
+        let tokens_iter = Token::lexer(&unparsed);
+        let mut tokens = Tokens::new(tokens_iter);
+        let mut statements = Vec::<ast::Statement>::new();
+        let mut notes = ParseNotes::new(source);
+
+        loop {
+            match tokens.peek() {
+                Some(_) =>
+                    statements.push(
+                        parse_statement(&mut tokens, &mut notes)?
+                    ),
+                None => break,
+            }
+        }
+
+        Ok((statements, notes))
+    }
 
     #[test]
     fn parse_top_level_attributes() {
@@ -990,7 +1058,7 @@ mod tests {
 
     #[test]
     fn parse_let_without_value() {
-        parse_purr(
+        parse_purr_statements(
             "let hello_world: Lorem<Ipsum>::Dolor;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -998,7 +1066,7 @@ mod tests {
 
     #[test]
     fn parse_let_with_expr() {
-        parse_purr(
+        parse_purr_statements(
             "let hello: number; let world = hello;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -1006,7 +1074,7 @@ mod tests {
 
     #[test]
     fn parse_anon_struct() {
-        parse_purr(
+        parse_purr_statements(
             "let hello: .{ a: number, b: text } = .{
                 a: 1,
                 b: \"Hello\"
@@ -1033,7 +1101,7 @@ mod tests {
 
     #[test]
     fn parse_literals() {
-        parse_purr(
+        parse_purr_statements(
             "1;2;3;4.2;123.456;0xef;\"Hello world\";true;false;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -1041,7 +1109,7 @@ mod tests {
 
     #[test]
     fn parse_unary_expression() {
-        parse_purr(
+        parse_purr_statements(
             "-128;!true".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -1049,7 +1117,7 @@ mod tests {
 
     #[test]
     fn parse_binary_expression() {
-        parse_purr(
+        parse_purr_statements(
             "1 + 4%2 - 5*6^7 > 10 && 1 == 2/2".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -1057,7 +1125,7 @@ mod tests {
 
     #[test]
     fn parse_call_and_field() {
-        parse_purr(
+        parse_purr_statements(
             "hello.world().my.result(lorem, ipsum)(1, 2, true)".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -1065,7 +1133,7 @@ mod tests {
 
     #[test]
     fn parse_parenthesised_expression() {
-        parse_purr(
+        parse_purr_statements(
             "2 * (2 + 2)".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
@@ -1137,7 +1205,7 @@ mod tests {
 
     #[test]
     fn parse_struct_literal() {
-        parse_purr(
+        parse_purr_statements(
             "
             let position = Vec2 {
                 x: 1, y: 2
@@ -1149,7 +1217,7 @@ mod tests {
 
     #[test]
     fn parse_terminal_keywords() {
-        parse_purr(
+        parse_purr_statements(
             "break;continue;return;return 1;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine

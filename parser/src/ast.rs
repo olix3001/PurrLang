@@ -15,6 +15,25 @@ impl NodeId {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Item {
+    pub kind: ItemKind,
+    pub pos: FileRange,
+    pub attributes: Attributes,
+    pub id: NodeId
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ItemKind {
+    Module(ModuleDefinition),
+    Import(ImportTree),
+
+    Trigger(Trigger),
+    BlockDefinition(BlockDefinition),
+    FunctionDefinition(FunctionDefinition),
+    StructDefinition(StructDefinition),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Statement {
     pub kind: StatementKind,
     pub pos: FileRange,
@@ -24,17 +43,10 @@ pub struct Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementKind {
-    Module(ModuleDefinition),
-    Import(ImportTree),
-
     Expr(Expression),
     ExprNoSemi(Expression),
 
     LetDefinition(LetDefinition),
-    Trigger(Trigger),
-    BlockDefinition(BlockDefinition),
-    FunctionDefinition(FunctionDefinition),
-    StructDefinition(StructDefinition),
 
     Return(Option<Expression>),
     Break,
@@ -44,7 +56,7 @@ pub enum StatementKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleDefinition {
     pub name: String,
-    pub body: Vec<Statement>,
+    pub body: Vec<Item>,
     // Modules can be sourced from other files so that changes
     // file context when accessing them.
     pub source: PurrSource
