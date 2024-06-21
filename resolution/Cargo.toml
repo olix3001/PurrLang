@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 ahash = "0.8.11"
 
+error.workspace = true
 parser.workspace = true
 common.workspace = true

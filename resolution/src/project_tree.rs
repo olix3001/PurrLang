@@ -114,8 +114,7 @@ impl ProjectTree {
         }
     }
 
-    pub fn resolve_name(&self, path: impl Into<ResolutionPath>) -> Option<ast::NodeId> {
-        let path: ResolutionPath = path.into();
+    pub fn resolve_name(&self, path: &ResolutionPath) -> Option<ast::NodeId> {
         let mut path = path.segments.iter();
 
         let mut current_tree = self;
@@ -130,8 +129,7 @@ impl ProjectTree {
         } else { None }
     }
 
-    pub fn resolve_tree(&self, path: impl Into<ResolutionPath>) -> Option<&ProjectTree> {
-        let path: ResolutionPath = path.into();
+    pub fn resolve_tree(&self, path: &ResolutionPath) -> Option<&ProjectTree> {
         let mut path = path.segments.iter();
 
         let mut current_tree = self;
@@ -143,6 +141,6 @@ impl ProjectTree {
 
         if let Some(segment) = path.next() {
             current_tree.subtrees.get(segment)
-        } else { None }
+        } else { Some(current_tree) }
     }
 }

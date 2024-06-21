@@ -4,7 +4,7 @@ use common::{FileRange, PurrSource};
 
 static NODE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct NodeId(u64);
 

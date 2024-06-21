@@ -73,6 +73,34 @@ impl From<SyntaxError> for ErrorReport {
     }
 }
 
+#[derive(Debug)]
+pub enum CompilerError {
+    UnknownPath {
+        path: Vec<String>,
+        pos: FileRange,
+        file: PurrSource
+    },
+    Custom(ErrorReport)
+}
+
+impl From<CompilerError> for ErrorReport {
+    fn from(err: CompilerError) -> Self {
+        match err {
+            CompilerError::UnknownPath { path: _path, pos, file } =>
+                create_error(
+                    ErrorInfo::from_area(CodeArea { pos: pos.clone(), file: file.clone() }),
+                    "Compilation error",
+                    &[(
+                        CodeArea { pos, file },
+                        "Could not resolve this path.",
+                    )],
+                    Some("Ensure that this path is spelled correctly and that It exists.")
+                ),
+            CompilerError::Custom(report) => report
+        }
+    }
+}
+
 pub fn create_error<S: AsRef<str>>(
     info: ErrorInfo,
     message: S,
