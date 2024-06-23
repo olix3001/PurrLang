@@ -185,6 +185,7 @@ pub fn resolve_item_statements(
                 notes.current_path = path_temp;
                 notes.ast = ast_temp;
             },
+
             ast::ItemKind::FunctionDefinition(definition) => {
                 let ResolvedTy::Function(_, return_type) = 
                     signature_to_resolved_ty(&definition.signature, notes)?
@@ -217,6 +218,7 @@ pub fn resolve_item_statements(
                 notes.expected_ret_ty = None;
                 notes.expected_block_ty = None;
             },
+
             ast::ItemKind::Trigger(trigger) => {
                 notes.expected_ret_ty = Some((
                     ResolvedTy::Void,
@@ -233,6 +235,7 @@ pub fn resolve_item_statements(
                     notes
                 )?;
                 if block_return_type != ResolvedTy::Void {
+                    // TODO: Custom error?
                     return Err(CompilerError::MismatchedTypes {
                         pos: item.pos.clone(),
                         lhs: item.pos.clone(),
