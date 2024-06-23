@@ -88,6 +88,11 @@ pub enum CompilerError {
         rhs_ty: String,
         file: PurrSource
     },
+    UnknownField {
+        field: FileRange,
+        definition: FileRange,
+        file: PurrSource
+    },
     Custom(ErrorReport)
 }
 
@@ -119,6 +124,22 @@ impl From<CompilerError> for ErrorReport {
                         )
                     ],
                     Some("Ensure those two types match by changing one of them.")
+                ),
+            CompilerError::UnknownField { field, definition, file } =>
+                create_error(
+                    ErrorInfo::from_area(CodeArea { pos: field.clone(), file: file.clone() }),
+                    "Compilation error",
+                    &[
+                        (
+                            CodeArea { pos: field, file: file.clone() },
+                            "This field is not defined on Its type.",
+                        ),
+                        (
+                            CodeArea { pos: definition, file },
+                            "Type defined here.",
+                        )
+                    ],
+                    None
                 ),
             CompilerError::Custom(report) => report
         }

@@ -1,6 +1,6 @@
 use ahash::{HashMap, HashMapExt};
-use common::PurrSource;
-use error::CompilerError;
+use common::{FileRange, PurrSource};
+use error::{create_error, info::CodeArea, CompilerError};
 use parser::{ast::{self, NodeId}, parser::ParseNotes};
 use crate::project_tree::{ProjectTree, ResolutionPath};
 use super::ResolvedTy;
@@ -10,7 +10,12 @@ pub struct ResolutionNotes<'a> {
     current_path: ResolutionPath,
     current_file: PurrSource,
     project_tree: &'a ProjectTree,
-    ast: &'a Vec<ast::Item>
+    expected_ret_ty: Option<(ResolvedTy, FileRange)>,
+    expected_block_ty: Option<(ResolvedTy, FileRange)>,
+    default_ret_ty: ResolvedTy,
+    ast: &'a Vec<ast::Item>,
+    struct_field_positions: HashMap<NodeId, HashMap<String, FileRange>>,
+    items_positions: HashMap<NodeId, FileRange>
 }
 
 #[derive(Default, Debug, Clone)]
@@ -25,7 +30,12 @@ impl<'a> ResolutionNotes<'a> {
             current_path: ResolutionPath::default(),
             current_file: ast.1.file.clone(),
             project_tree,
-            ast: &ast.0
+            expected_ret_ty: None,
+            expected_block_ty: None,
+            default_ret_ty: ResolvedTy::Void,
+            ast: &ast.0,
+            struct_field_positions: HashMap::new(),
+            items_positions: HashMap::new()
         }
     }
 }
@@ -87,10 +97,10 @@ pub fn resolve(
     project_tree: &ProjectTree
 ) -> Result<ResolvedData, CompilerError> {
     let mut data = ResolvedData::default();
-    let notes = ResolutionNotes::from_ast(ast, project_tree);
+    let mut notes = ResolutionNotes::from_ast(ast, project_tree);
 
-    resolve_tl_types(&mut data, &notes)?;
-    resolve_item_statements(&mut data, &notes)?;
+    resolve_tl_types(&mut data, &mut notes)?;
+    resolve_item_statements(&mut data, &mut notes)?;
 
     Ok(data)
 }
@@ -100,21 +110,23 @@ pub fn resolve(
 /// It allows It to occur during the later steps.
 pub fn resolve_tl_types(
     resolved: &mut ResolvedData,
-    notes: &ResolutionNotes
+    notes: &mut ResolutionNotes
 ) -> Result<(), CompilerError> {
     for item in notes.ast.iter() {
+        notes.items_positions.insert(item.id, item.pos.clone());
         match &item.kind {
             ast::ItemKind::Module(module) => {
+                let path_temp = notes.current_path.clone();
+                notes.current_path = notes.current_path.clone()
+                    .join(&[module.name.as_str()].as_slice().into());
+                let ast_temp = notes.ast;
+                notes.ast = &module.body;
                 resolve_tl_types(
                     resolved,
-                    &ResolutionNotes {
-                        current_path: notes.current_path.clone()
-                            .join(&[module.name.as_str()].as_slice().into()),
-                        current_file: module.source.clone(),
-                        project_tree: notes.project_tree,
-                        ast: &module.body,
-                    }
+                    notes
                 )?;
+                notes.current_path = path_temp;
+                notes.ast = ast_temp;
             },
             ast::ItemKind::BlockDefinition(block) => {
                 resolved.types.insert(
@@ -129,6 +141,11 @@ pub fn resolve_tl_types(
                 );
             },
             ast::ItemKind::StructDefinition(struct_) => {
+                for field in struct_.fields.iter() {
+                    let mut map = HashMap::new();
+                    map.insert(field.name.clone(), field.pos.clone());
+                    notes.struct_field_positions.insert(item.id, map);
+                }
                 resolved.types.insert(
                     item.id,
                     ResolvedTy::from_ast_ty(
@@ -151,29 +168,54 @@ pub fn resolve_tl_types(
 
 pub fn resolve_item_statements(
     resolved: &mut ResolvedData,
-    notes: &ResolutionNotes
+    notes: &mut ResolutionNotes
 ) -> Result<(), CompilerError> {
     for item in notes.ast.iter() {
         match &item.kind {
             ast::ItemKind::Module(module) => {
+                let path_temp = notes.current_path.clone();
+                notes.current_path = notes.current_path.clone()
+                    .join(&[module.name.as_str()].as_slice().into());
+                let ast_temp = notes.ast;
+                notes.ast = &module.body;
                 resolve_item_statements(
                     resolved,
-                    &ResolutionNotes {
-                        current_path: notes.current_path.clone()
-                            .join(&[module.name.as_str()].as_slice().into()),
-                        current_file: module.source.clone(),
-                        project_tree: notes.project_tree,
-                        ast: &module.body,
-                    }
+                    notes
                 )?;
+                notes.current_path = path_temp;
+                notes.ast = ast_temp;
             },
             ast::ItemKind::FunctionDefinition(definition) => {
-                resolve_statements(
+                let ResolvedTy::Function(_, return_type) = 
+                    signature_to_resolved_ty(&definition.signature, notes)?
+                    else { unreachable!() };
+                notes.expected_ret_ty = Some((
+                    *return_type.clone(),
+                    definition.signature.return_type.pos.clone()
+                ));
+                notes.expected_block_ty = Some((
+                    *return_type.clone(),
+                    definition.signature.return_type.pos.clone()
+                ));
+                let block_return_type = resolve_statements(
                     &definition.body,
                     resolved,
                     &mut Stack::new(),
                     notes
                 )?;
+                if block_return_type != *return_type {
+                    return Err(CompilerError::MismatchedTypes {
+                        pos: item.pos.clone(),
+                        lhs: definition.signature.return_type.pos.clone(),
+                        lhs_ty: return_type.pretty_name(&notes.project_tree),
+                        rhs: definition.body.last().map(|rhs| rhs.pos.clone())
+                            .unwrap_or(item.pos.clone()).clone(),
+                        rhs_ty: block_return_type.pretty_name(&notes.project_tree),
+                        file: notes.current_file.clone()
+                    });
+                }
+                notes.expected_ret_ty = None;
+                notes.expected_block_ty = None;
             }
             _ => {}
         }
@@ -185,9 +227,10 @@ pub fn resolve_statements(
     ast: &Vec<ast::Statement>,
     resolved: &mut ResolvedData,
     stack: &mut Stack,
-    notes: &ResolutionNotes
-) -> Result<(), CompilerError> {
-    for stmt in ast.iter() {
+    notes: &mut ResolutionNotes
+) -> Result<ResolvedTy, CompilerError> {
+    let mut block_return_type = notes.default_ret_ty.clone();
+    for (i, stmt) in ast.iter().enumerate() {
         match &stmt.kind {
             ast::StatementKind::LetDefinition(definition) => {
                 if definition.ty.kind != ast::TyKind::Infer {
@@ -198,15 +241,15 @@ pub fn resolve_statements(
                 }
 
                 if let Some(rhs) = &definition.value {
-                    let return_type = resolve_expr(&rhs, resolved, stack, notes)?;
+                    let return_type = resolve_expr(&rhs, resolved, stack, notes, )?;
                     if let Some(lhs_ty) = resolved.types.get(&stmt.id) {
                         if return_type != *lhs_ty {
                             return Err(CompilerError::MismatchedTypes {
                                 pos: stmt.pos.clone(),
                                 lhs: definition.ty.pos.clone(),
-                                lhs_ty: lhs_ty.pretty_name(),
+                                lhs_ty: lhs_ty.pretty_name(&notes.project_tree),
                                 rhs: rhs.pos.clone(),
-                                rhs_ty: return_type.pretty_name(),
+                                rhs_ty: return_type.pretty_name(&notes.project_tree),
                                 file: notes.current_file.clone()
                             });
                         }
@@ -218,11 +261,63 @@ pub fn resolve_statements(
                 stack.top().define_variable(&definition.symbol, stmt.id);
             },
 
-            ast::StatementKind::Expr(expr) |
-            ast::StatementKind::ExprNoSemi(expr) |
+            ast::StatementKind::Expr(expr) => {
+                let expr_ty = 
+                    resolve_expr(&expr, resolved, stack, notes)?;
+                resolved.types.insert(
+                    stmt.id, expr_ty
+                );
+            },
+            ast::StatementKind::ExprNoSemi(expr) => {
+                if i != ast.len()-1 {
+                    return Err(CompilerError::Custom(
+                        create_error(
+                            error::info::ErrorInfo::from_area(CodeArea {
+                                pos: expr.pos.clone(), file: notes.current_file.clone()
+                            }),
+                            "Compilation error",
+                            &[(
+                                CodeArea { pos: expr.pos.clone(), file: notes.current_file.clone() },
+                                "Expected semicolon after this expression.",
+                            )],
+                            Some("Returning (no-semi) expression are only allowed at the end of block.")
+                        )
+                    ));
+                }
+                let expr_ty = 
+                    resolve_expr(&expr, resolved, stack, notes)?;
+                if let Some((block_ty, block_pos)) = &notes.expected_block_ty {
+                    if expr_ty != *block_ty {
+                        return Err(CompilerError::MismatchedTypes {
+                            pos: stmt.pos.clone(),
+                            lhs: block_pos.clone(),
+                            lhs_ty: block_ty.pretty_name(&notes.project_tree),
+                            rhs: expr.pos.clone(),
+                            rhs_ty: expr_ty.pretty_name(&notes.project_tree),
+                            file: notes.current_file.clone()
+                        });
+                    }
+                }
+                block_return_type = expr_ty.clone();
+                resolved.types.insert(
+                    stmt.id, expr_ty
+                );
+            }
             ast::StatementKind::Return(Some(expr)) => {
                 let expr_ty = 
                     resolve_expr(&expr, resolved, stack, notes)?;
+                if let Some((ret_ty, ret_pos)) = &notes.expected_ret_ty {
+                    if expr_ty != *ret_ty {
+                        return Err(CompilerError::MismatchedTypes {
+                            pos: stmt.pos.clone(),
+                            lhs: ret_pos.clone(),
+                            lhs_ty: ret_ty.pretty_name(&notes.project_tree),
+                            rhs: expr.pos.clone(),
+                            rhs_ty: expr_ty.pretty_name(&notes.project_tree),
+                            file: notes.current_file.clone()
+                        });
+                    }
+                }
                 resolved.types.insert(
                     stmt.id, expr_ty
                 );
@@ -230,14 +325,14 @@ pub fn resolve_statements(
             _ => {}
         }
     }
-    Ok(())
+    Ok(block_return_type)
 }
 
 pub fn resolve_expr(
     expr: &ast::Expression,
     resolved: &mut ResolvedData,
     stack: &mut Stack,
-    notes: &ResolutionNotes
+    notes: &mut ResolutionNotes,
 ) -> Result<ResolvedTy, CompilerError> {
     let resolved = match &expr.kind {
         ast::ExpressionKind::Number(_) => ResolvedTy::Number,
@@ -261,7 +356,102 @@ pub fn resolve_expr(
 
             unimplemented!()
         },
-        _ => { ResolvedTy::Void }
+
+        ast::ExpressionKind::Field(obj, field) => {
+            let obj_ty = resolve_expr(
+                &obj,
+                resolved,
+                stack,
+                notes
+            )?;
+
+            fn expected_struct<T>(
+                expr: &ast::Expression,
+                obj: &Box<ast::Expression>,
+                ty: &ResolvedTy,
+                notes: &ResolutionNotes
+            ) -> Result<T, CompilerError> {
+                Err(CompilerError::Custom(
+                    create_error(
+                        error::info::ErrorInfo::from_area(CodeArea {
+                            pos: expr.pos.clone(), file: notes.current_file.clone()
+                        }),
+                        "Compilation error",
+                        &[(
+                            CodeArea { pos: obj.pos.clone(), file: notes.current_file.clone() },
+                            &format!("Expected this to be struct, but got {}.",
+                                ty.pretty_name(&notes.project_tree))
+                        )],
+                        None
+                    )
+                ))
+            }
+
+            let ResolvedTy::Path(def_path) = obj_ty else {
+                return expected_struct(expr, obj, &obj_ty, notes);
+            };
+            let ResolvedTy::Struct(struct_type) = resolved.types.get(&def_path).unwrap().clone() else {
+                return expected_struct(expr, obj, &obj_ty, notes);
+            };
+
+            if let Some(field_ty) = struct_type.get(field) {
+                field_ty.clone()
+            } else {
+                return Err(CompilerError::UnknownField {
+                    field: obj.pos.end..expr.pos.end,
+                    definition: notes.items_positions.get(&def_path).unwrap().clone(),
+                    file: notes.current_file.clone()
+                });
+            }
+        },
+
+        ast::ExpressionKind::StructLiteral(path, fields) => {
+            let struct_ty = resolve_ty(&ast::Ty {
+                kind: ast::TyKind::Path(path.clone()),
+                pos: 0..0
+            }, notes)?;
+
+            let ResolvedTy::Path(struct_node) = struct_ty else { unreachable!() };
+            let ResolvedTy::Struct(struct_type) = resolved.types.get(&struct_node).unwrap().clone() else {
+                return Err(CompilerError::MismatchedTypes {
+                    pos: expr.pos.clone(),
+                    lhs: notes.items_positions.get(&struct_node).unwrap().clone(),
+                    lhs_ty: resolved.types.get(&struct_node).unwrap().pretty_name(&notes.project_tree),
+                    rhs: path.pos.clone(),
+                    rhs_ty: "Struct Literal".to_string(),
+                    file: notes.current_file.clone()
+                });
+            };
+            for field in fields.iter() {
+                let field_ty = resolve_expr(
+                    &field.value,
+                    resolved,
+                    stack,
+                    notes
+                )?;
+                let Some(field_expected_ty) = struct_type.get(&field.name) else {
+                    return Err(CompilerError::UnknownField {
+                        field: field.pos.clone(),
+                        definition: notes.items_positions.get(&struct_node).unwrap().clone(),
+                        file: notes.current_file.clone()
+                    });
+                };
+                if field_ty != *field_expected_ty {
+                    return Err(CompilerError::MismatchedTypes {
+                        pos: expr.pos.clone(),
+                        lhs: notes.struct_field_positions.get(&struct_node).unwrap()
+                            .get(&field.name).unwrap().clone(),
+                        lhs_ty: field_expected_ty.pretty_name(&notes.project_tree),
+                        rhs: field.pos.clone(),
+                        rhs_ty: field_ty.pretty_name(&notes.project_tree),
+                        file: notes.current_file.clone()
+                    });
+                }
+            }
+            struct_ty
+        },
+
+        _ => { notes.default_ret_ty.clone() }
     };
     Ok(resolved)
 }

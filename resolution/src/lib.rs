@@ -2,7 +2,7 @@ use ahash::{HashMap, HashMapExt};
 use common::PurrSource;
 use error::CompilerError;
 use parser::ast;
-use project_tree::ResolutionPath;
+use project_tree::{ProjectTree, ResolutionPath};
 
 pub mod project_tree;
 pub mod resolve;
@@ -98,7 +98,7 @@ impl ResolvedTy {
         }
     }
 
-    pub fn pretty_name(&self) -> String {
+    pub fn pretty_name(&self, _tree: &ProjectTree) -> String {
         format!("{:?}", self) // Temporary.
     }
 }
