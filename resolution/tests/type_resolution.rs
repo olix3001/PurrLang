@@ -121,6 +121,38 @@ fn resolve_field_types() {
 }
 
 #[test]
+fn cast_anon_struct() {
+    const SOURCE: &str = "
+        struct Vec2 { x: number, y: number }
+
+        def hello() -> Vec2 {
+            .{ x: 1, y: 5 }
+        }
+
+        def world(value: .{ x: number, y: number }) -> number {
+            value.x
+        }
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let _resolved = resolve(&ast, &names).unwrap();
+}
+
+#[test]
+fn resolve_anon_struct() {
+    const SOURCE: &str = "
+        def world() -> .{ x: number, y: number } {
+            .{ x: 1, y: 5 }
+        }
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let _resolved = resolve(&ast, &names).unwrap();
+}
+
+#[test]
 #[should_panic]
 fn trigger_requires_void_mismatch() {
     const SOURCE: &str = "

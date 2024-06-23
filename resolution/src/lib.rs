@@ -3,6 +3,7 @@ use common::PurrSource;
 use error::CompilerError;
 use parser::ast;
 use project_tree::{ProjectTree, ResolutionPath};
+use resolve::{ResolutionNotes, ResolvedData};
 
 pub mod project_tree;
 pub mod resolve;
@@ -100,5 +101,21 @@ impl ResolvedTy {
 
     pub fn pretty_name(&self, _tree: &ProjectTree) -> String {
         format!("{:?}", self) // Temporary.
+    }
+
+    pub fn matches(
+        &self,
+        target: &Self,
+        resolved: &ResolvedData,
+        _notes: &ResolutionNotes
+    ) -> bool {
+        match (self, target) {
+            (ResolvedTy::Struct(fields_a), ResolvedTy::Path(target_path)) => {
+                let Some(ResolvedTy::Struct(fields_b)) = resolved.types.get(target_path)
+                    else { return false; };
+                fields_a == fields_b
+            },
+            (a, b) => a == b
+        }
     }
 }

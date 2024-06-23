@@ -60,6 +60,14 @@ impl Stack {
         None
     }
 
+    pub fn from_signature(signature: &ast::Signature) -> Self {
+        let mut stack = Self::new();
+        for argument in signature.arguments.iter() {
+            stack.top().define_variable(&argument.name, argument.id);
+        }
+        stack
+    }
+
     pub fn push(&mut self) {
         self.ribs.push(Rib::new())
     }
@@ -129,23 +137,23 @@ pub fn resolve_tl_types(
                 notes.ast = ast_temp;
             },
             ast::ItemKind::BlockDefinition(block) => {
+                let ty = signature_to_resolved_ty(&block.signature, resolved, notes)?;
                 resolved.types.insert(
-                    item.id,
-                    signature_to_resolved_ty(&block.signature, notes)?
+                    item.id, ty
                 );
             },
             ast::ItemKind::FunctionDefinition(function) => {
+                let ty = signature_to_resolved_ty(&function.signature, resolved, notes)?;
                 resolved.types.insert(
-                    item.id,
-                    signature_to_resolved_ty(&function.signature, notes)?
+                    item.id, ty
                 );
             },
             ast::ItemKind::StructDefinition(struct_) => {
+                let mut map = HashMap::new();
                 for field in struct_.fields.iter() {
-                    let mut map = HashMap::new();
                     map.insert(field.name.clone(), field.pos.clone());
-                    notes.struct_field_positions.insert(item.id, map);
                 }
+                notes.struct_field_positions.insert(item.id, map);
                 resolved.types.insert(
                     item.id,
                     ResolvedTy::from_ast_ty(
@@ -188,7 +196,7 @@ pub fn resolve_item_statements(
 
             ast::ItemKind::FunctionDefinition(definition) => {
                 let ResolvedTy::Function(_, return_type) = 
-                    signature_to_resolved_ty(&definition.signature, notes)?
+                    signature_to_resolved_ty(&definition.signature, resolved, notes)?
                     else { unreachable!() };
                 notes.expected_ret_ty = Some((
                     *return_type.clone(),
@@ -198,13 +206,14 @@ pub fn resolve_item_statements(
                     *return_type.clone(),
                     definition.signature.return_type.pos.clone()
                 ));
+                let mut stack = Stack::from_signature(&definition.signature);
                 let block_return_type = resolve_statements(
                     &definition.body,
                     resolved,
-                    &mut Stack::new(),
+                    &mut stack,
                     notes
                 )?;
-                if block_return_type != *return_type {
+                if !block_return_type.matches(&*return_type, resolved, notes) {
                     return Err(CompilerError::MismatchedTypes {
                         pos: item.pos.clone(),
                         lhs: definition.signature.return_type.pos.clone(),
@@ -234,7 +243,7 @@ pub fn resolve_item_statements(
                     &mut Stack::new(),
                     notes
                 )?;
-                if block_return_type != ResolvedTy::Void {
+                if !block_return_type.matches(&ResolvedTy::Void, resolved, notes) {
                     // TODO: Custom error?
                     return Err(CompilerError::MismatchedTypes {
                         pos: item.pos.clone(),
@@ -275,7 +284,7 @@ pub fn resolve_statements(
                 if let Some(rhs) = &definition.value {
                     let return_type = resolve_expr(&rhs, resolved, stack, notes, )?;
                     if let Some(lhs_ty) = resolved.types.get(&stmt.id) {
-                        if return_type != *lhs_ty {
+                        if !return_type.matches(&lhs_ty, resolved, notes) {
                             return Err(CompilerError::MismatchedTypes {
                                 pos: stmt.pos.clone(),
                                 lhs: definition.ty.pos.clone(),
@@ -319,7 +328,7 @@ pub fn resolve_statements(
                 let expr_ty = 
                     resolve_expr(&expr, resolved, stack, notes)?;
                 if let Some((block_ty, block_pos)) = &notes.expected_block_ty {
-                    if expr_ty != *block_ty {
+                    if !expr_ty.matches(block_ty, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
                             pos: stmt.pos.clone(),
                             lhs: block_pos.clone(),
@@ -339,7 +348,7 @@ pub fn resolve_statements(
                 let expr_ty = 
                     resolve_expr(&expr, resolved, stack, notes)?;
                 if let Some((ret_ty, ret_pos)) = &notes.expected_ret_ty {
-                    if expr_ty != *ret_ty {
+                    if !expr_ty.matches(&*ret_ty, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
                             pos: stmt.pos.clone(),
                             lhs: ret_pos.clone(),
@@ -386,7 +395,7 @@ pub fn resolve_expr(
                 }
             }
 
-            unimplemented!()
+            unimplemented!("Could not resolve path {path:?}");
         },
 
         ast::ExpressionKind::Field(obj, field) => {
@@ -419,11 +428,21 @@ pub fn resolve_expr(
                 ))
             }
 
-            let ResolvedTy::Path(def_path) = obj_ty else {
-                return expected_struct(expr, obj, &obj_ty, notes);
-            };
-            let ResolvedTy::Struct(struct_type) = resolved.types.get(&def_path).unwrap().clone() else {
-                return expected_struct(expr, obj, &obj_ty, notes);
+            let (struct_type, def_span) = {
+                if let ResolvedTy::Path(def_path) = obj_ty {
+                    let ResolvedTy::Struct(struct_type) = resolved.types.get(&def_path).unwrap().clone() else {
+                        return expected_struct(expr, obj, &obj_ty, notes);
+                    };
+                    (
+                        struct_type,
+                        notes.items_positions.get(&def_path).unwrap().clone()
+                    )
+                } else {
+                    let ResolvedTy::Struct(struct_type) = obj_ty else {
+                        return expected_struct(expr, obj, &obj_ty, notes);
+                    };
+                    (struct_type, obj.pos.clone())
+                }
             };
 
             if let Some(field_ty) = struct_type.get(field) {
@@ -431,7 +450,7 @@ pub fn resolve_expr(
             } else {
                 return Err(CompilerError::UnknownField {
                     field: obj.pos.end..expr.pos.end,
-                    definition: notes.items_positions.get(&def_path).unwrap().clone(),
+                    definition: def_span,
                     file: notes.current_file.clone()
                 });
             }
@@ -454,6 +473,7 @@ pub fn resolve_expr(
                     file: notes.current_file.clone()
                 });
             };
+
             for field in fields.iter() {
                 let field_ty = resolve_expr(
                     &field.value,
@@ -461,6 +481,7 @@ pub fn resolve_expr(
                     stack,
                     notes
                 )?;
+
                 let Some(field_expected_ty) = struct_type.get(&field.name) else {
                     return Err(CompilerError::UnknownField {
                         field: field.pos.clone(),
@@ -468,7 +489,8 @@ pub fn resolve_expr(
                         file: notes.current_file.clone()
                     });
                 };
-                if field_ty != *field_expected_ty {
+
+                if !field_ty.matches(&*field_expected_ty, resolved, notes) {
                     return Err(CompilerError::MismatchedTypes {
                         pos: expr.pos.clone(),
                         lhs: notes.struct_field_positions.get(&struct_node).unwrap()
@@ -481,6 +503,22 @@ pub fn resolve_expr(
                 }
             }
             struct_ty
+        },
+
+        ast::ExpressionKind::AnonStruct(fields) => {
+            let mut fields_map = HashMap::new();
+            for field in fields.iter() {
+                fields_map.insert(
+                    field.name.clone(),
+                    resolve_expr(
+                        &field.value, 
+                        resolved, 
+                        stack, 
+                        notes
+                    )?
+                );
+            }
+            ResolvedTy::Struct(fields_map)
         },
 
         _ => { notes.default_ret_ty.clone() }
@@ -502,18 +540,21 @@ fn resolve_ty(
 
 fn signature_to_resolved_ty(
     signature: &ast::Signature,
+    resolved: &mut ResolvedData,
     notes: &ResolutionNotes
 ) -> Result<ResolvedTy, CompilerError> {
     let mut args = Vec::new();
 
     for arg in signature.arguments.iter() {
-        args.push(ResolvedTy::from_ast_ty(&arg.ty, &notes.current_path, &notes.project_tree, &notes.current_file)?);
+        let ty = resolve_ty(&arg.ty, notes)?;
+        args.push(ty.clone());
+        resolved.types.insert(arg.id, ty);
     }
 
     Ok(ResolvedTy::Function(
         args,
         Box::new(
-            ResolvedTy::from_ast_ty(&signature.return_type, &notes.current_path, &notes.project_tree, &notes.current_file)?
+            resolve_ty(&signature.return_type, notes)?
         )
     ))
 }
