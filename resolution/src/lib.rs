@@ -115,7 +115,21 @@ impl ResolvedTy {
                     else { return false; };
                 fields_a == fields_b
             },
+            (ResolvedTy::Path(source_path), ResolvedTy::Struct(fields_b)) => {
+                let Some(ResolvedTy::Struct(fields_a)) = resolved.types.get(source_path)
+                    else { return false; };
+                fields_a == fields_b
+            },
             (a, b) => a == b
+        }
+    }
+
+    pub fn resolve_to_top(&self, resolved: &ResolvedData) -> ResolvedTy {
+        match self {
+            ResolvedTy::Path(path) => {
+                resolved.types.get(path).unwrap().resolve_to_top(resolved)
+            },
+            other => other.clone()
         }
     }
 }

@@ -395,7 +395,10 @@ pub fn resolve_expr(
                 }
             }
 
-            unimplemented!("Could not resolve path {path:?}");
+            resolve_ty(&ast::Ty {
+                kind: ast::TyKind::Path(path.clone()),
+                pos: 0..0
+            }, notes)?
         },
 
         ast::ExpressionKind::Field(obj, field) => {
@@ -454,6 +457,72 @@ pub fn resolve_expr(
                     file: notes.current_file.clone()
                 });
             }
+        },
+
+        ast::ExpressionKind::Call { callee, generics: _generics, arguments } => {
+            let callee_ty = resolve_expr(&callee, resolved, stack, notes)?;
+
+            let ResolvedTy::Function(callee_args, callee_ret_ty) = 
+                callee_ty.resolve_to_top(resolved) else {
+                return Err(CompilerError::Custom(
+                    create_error(
+                        error::info::ErrorInfo::from_area(CodeArea {
+                            pos: expr.pos.clone(), file: notes.current_file.clone()
+                        }),
+                        "Compilation error",
+                        &[(
+                            CodeArea { pos: callee.pos.clone(), file: notes.current_file.clone() },
+                            "This expression is not callable.",
+                        )],
+                        Some("Only functions and blocks are callable.")
+                    )
+                ));
+            };
+            
+            let mut argument_types = Vec::new();
+            for arg in arguments.iter() {
+                argument_types.push(resolve_expr(&arg, resolved, stack, notes)?);
+            }
+
+            if argument_types.len() != callee_args.len() {
+                return Err(CompilerError::Custom(
+                    create_error(
+                        error::info::ErrorInfo::from_area(CodeArea {
+                            pos: expr.pos.clone(), file: notes.current_file.clone()
+                        }),
+                        "Compilation error",
+                        &[(
+                            CodeArea { pos: expr.pos.clone(), file: notes.current_file.clone() },
+                            &format!(
+                                "This function expects {} arguments but got {}.",
+                                callee_args.len(),
+                                argument_types.len()
+                            ),
+                        )],
+                        None
+                    )
+                ));
+            }
+
+            for (i, (callee_arg, call_arg)) in callee_args.iter().zip(argument_types.iter()).enumerate() {
+                if !call_arg.matches(callee_arg, resolved, notes) {
+                    return Err(CompilerError::Custom(
+                        create_error(
+                            error::info::ErrorInfo::from_area(CodeArea {
+                                pos: expr.pos.clone(), file: notes.current_file.clone()
+                            }),
+                            "Compilation error",
+                            &[(
+                                CodeArea { pos: arguments[i].pos.clone(), file: notes.current_file.clone() },
+                                "This argument does not match Its definition.",
+                            )],
+                            None
+                        )
+                    ));
+                }
+            }
+
+            *callee_ret_ty.clone()
         },
 
         ast::ExpressionKind::StructLiteral(path, fields) => {

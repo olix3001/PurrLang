@@ -125,12 +125,16 @@ fn cast_anon_struct() {
     const SOURCE: &str = "
         struct Vec2 { x: number, y: number }
 
-        def hello() -> Vec2 {
-            .{ x: 1, y: 5 }
+        def hello(x: number) -> Vec2 {
+            .{ x, y: 5 }
         }
 
         def world(value: .{ x: number, y: number }) -> number {
             value.x
+        }
+
+        def lorem() -> number {
+            world(hello(5))
         }
     ";
 

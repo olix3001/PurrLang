@@ -697,9 +697,24 @@ pub fn parse_values_struct(
     }
     let fields = separated(tokens, notes, Token::Comma, |tokens, notes| {
         let name = expect_ident(tokens, notes)?;
-        let start_pos = tokens.position().unwrap().start;
-        expect(tokens, notes, Token::Colon)?;
-        let value = parse_expression(tokens, notes)?;
+        let ident_pos = tokens.position().unwrap().clone();
+        let start_pos = ident_pos.start;
+        let value = if tokens.check(Token::Colon) {
+            parse_expression(tokens, notes)?
+        } else {
+            ast::Expression {
+                kind: ast::ExpressionKind::Path(ast::PurrPath {
+                    segments: vec![ast::PurrPathSegment {
+                        ident: name.clone(),
+                        args: None,
+                        pos: ident_pos.clone()
+                    }],
+                    pos: ident_pos.clone()
+                }),
+                id: NodeId::next(),
+                pos: ident_pos
+            }
+        };
         let end_pos = tokens.position().unwrap().end;
         Ok(ast::ValueField {
             name,
