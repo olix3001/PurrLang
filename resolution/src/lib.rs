@@ -18,7 +18,8 @@ pub enum ResolvedTy {
 
     Path(parser::ast::NodeId),
     Struct(HashMap<String, Self>),
-    Function(Vec<Self>, Box<Self>)
+    Function(Vec<Self>, Box<Self>),
+    TyVar(String)
 }
 
 impl ResolvedTy {

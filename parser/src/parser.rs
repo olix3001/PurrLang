@@ -298,14 +298,12 @@ pub fn parse_item(
 
         Some(Token::Define) => {
             let name = expect_ident(tokens, notes)?;
-            let generics = parse_optional_generics(tokens, notes)?;
             let signature = parse_signature(tokens, notes, ast::TyKind::Void)?;
             expect(tokens, notes, Token::LCurly)?;
             let body = parse_statements_until(tokens, notes, Token::RCurly)?;
             ast::ItemKind::FunctionDefinition(
                 ast::FunctionDefinition {
                     name,
-                    generics,
                     signature,
                     body
                 }
@@ -953,8 +951,9 @@ fn parse_import(
 fn parse_signature(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
-    default_return_ty: ast::TyKind
+    default_return_ty: ast::TyKind,
 ) -> Result<ast::Signature, SyntaxError> {
+    let generics = parse_optional_generics(tokens, notes)?;
     expect(tokens, notes, Token::LParen)?;
 
     let arguments = if !tokens.check(Token::RParen) {
@@ -977,7 +976,7 @@ fn parse_signature(
         parse_ty(tokens, notes)?
     } else { ast::Ty { kind: default_return_ty, pos: 0..0 } };
 
-    Ok(ast::Signature { arguments, return_type })
+    Ok(ast::Signature { arguments, return_type, generics })
 }
 
 fn separated<T>(

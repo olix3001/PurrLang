@@ -104,7 +104,6 @@ pub struct BlockDefinition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDefinition {
     pub name: String,
-    pub generics: Vec<TypeVariable>,
     pub signature: Signature,
     pub body: Vec<Statement>
 }
@@ -124,6 +123,7 @@ pub struct TypeVariable {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature {
+    pub generics: Vec<TypeVariable>,
     pub arguments: Vec<TypeField>,
     pub return_type: Ty
 }
