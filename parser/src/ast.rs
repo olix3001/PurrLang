@@ -161,7 +161,11 @@ pub enum ExpressionKind {
     Paren(Box<Expression>),
 
     Field(Box<Expression>, String),
-    Call(Box<Expression>, Vec<Expression>),
+    Call {
+        callee: Box<Expression>,
+        generics: Option<GenericArgs>,
+        arguments: Vec<Expression>
+    },
 
     StructLiteral(PurrPath, Vec<ValueField>),
 

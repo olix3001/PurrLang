@@ -567,7 +567,7 @@ pub fn parse_expression_call_or_field(
 ) -> Result<ast::Expression, SyntaxError> {
     let mut subject = parse_primary_expression(tokens, notes)?;
 
-    while tokens.check(Token::Period) || tokens.check(Token::LParen) {
+    while tokens.check(Token::Period) || tokens.check(Token::LParen) || tokens.check(Token::Colon) {
         match tokens.current() {
             Some(Token::Period) => {
                 let field_name = expect_ident(tokens, notes)?;
@@ -578,7 +578,12 @@ pub fn parse_expression_call_or_field(
                     id: NodeId::next()
                 };
             },
-            Some(Token::LParen) => {
+            Some(Token::LParen) | Some(Token::Colon) => {
+                let generics = if tokens.current() == Some(Token::Colon) {
+                    let generics = parse_optional_generic_args(tokens, notes)?;
+                    expect(tokens, notes, Token::LParen)?;
+                    generics
+                } else { None };
                 let arguments = if tokens.peek() != Some(Token::RParen) {
                     separated(tokens, notes, Token::Comma, parse_expression)?
                 } else { Vec::new() };
@@ -586,7 +591,11 @@ pub fn parse_expression_call_or_field(
                 let end_pos = tokens.position().unwrap().end;
                 subject = ast::Expression {
                     pos: subject.pos.start..end_pos,
-                    kind: ast::ExpressionKind::Call(Box::new(subject), arguments),
+                    kind: ast::ExpressionKind::Call {
+                        callee: Box::new(subject),
+                        generics,
+                        arguments
+                    },
                     id: NodeId::next()
                 };
             },
@@ -844,22 +853,7 @@ pub fn parse_path(
         let segment_name = expect_ident(tokens, notes)?;
         let start_pos = tokens.position().unwrap().start;
 
-        // Optional generic arguments.
-        let generic_args = if tokens.check(Token::Lt) {
-            let start_pos = tokens.position().unwrap().start+1;
-            let args = separated(
-                tokens,
-                notes,
-                Token::Comma,
-                parse_ty
-            )?;
-            expect(tokens, notes, Token::Gt)?;
-            let end_pos = tokens.position().unwrap().end;
-            Some(ast::GenericArgs {
-                args,
-                pos: start_pos..end_pos
-            })
-        } else { None };
+        let generic_args = parse_optional_generic_args(tokens, notes)?;
 
         let end_pos = tokens.position().unwrap().end;
 
@@ -881,6 +875,27 @@ pub fn parse_path(
         segments,
         pos: start_pos..end_pos
     })
+}
+
+fn parse_optional_generic_args(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<Option<ast::GenericArgs>, SyntaxError> {
+    if tokens.check(Token::Lt) {
+        let start_pos = tokens.position().unwrap().start+1;
+        let args = separated(
+            tokens,
+            notes,
+            Token::Comma,
+            parse_ty
+        )?;
+        expect(tokens, notes, Token::Gt)?;
+        let end_pos = tokens.position().unwrap().end;
+        Ok(Some(ast::GenericArgs {
+            args,
+            pos: start_pos..end_pos
+        }))
+    } else { Ok(None) }
 }
 
 fn parse_block_definition(
@@ -1150,7 +1165,7 @@ mod tests {
     #[test]
     fn parse_call_and_field() {
         parse_purr_statements(
-            "hello.world().my.result(lorem, ipsum)(1, 2, true)".to_string(),
+            "hello.world:<number>().my.result(lorem, ipsum)(1, 2, true);Hello::World<number>()".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
