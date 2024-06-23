@@ -5,7 +5,7 @@ use parser::ast;
 use project_tree::ResolutionPath;
 
 pub mod project_tree;
-pub mod resolve_types;
+pub mod resolve;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedTy {
@@ -15,6 +15,7 @@ pub enum ResolvedTy {
 
     Number,
     Text,
+    Bool,
 
     Path(parser::ast::NodeId),
     Struct(HashMap<String, Self>),
@@ -95,5 +96,9 @@ impl ResolvedTy {
                 ))
             }
         }
+    }
+
+    pub fn pretty_name(&self) -> String {
+        format!("{:?}", self) // Temporary.
     }
 }

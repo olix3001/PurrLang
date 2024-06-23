@@ -80,6 +80,14 @@ pub enum CompilerError {
         pos: FileRange,
         file: PurrSource
     },
+    MismatchedTypes {
+        pos: FileRange,
+        lhs: FileRange,
+        lhs_ty: String,
+        rhs: FileRange,
+        rhs_ty: String,
+        file: PurrSource
+    },
     Custom(ErrorReport)
 }
 
@@ -95,6 +103,22 @@ impl From<CompilerError> for ErrorReport {
                         "Could not resolve this path.",
                     )],
                     Some("Ensure that this path is spelled correctly and that It exists.")
+                ),
+            CompilerError::MismatchedTypes { pos, lhs, lhs_ty, rhs, rhs_ty, file } =>
+                create_error(
+                    ErrorInfo::from_area(CodeArea { pos, file: file.clone() }),
+                    "Compilation error",
+                    &[
+                        (
+                            CodeArea { pos: lhs, file: file.clone() },
+                            &format!("This is of type {lhs_ty}.")
+                        ),
+                        (
+                            CodeArea { pos: rhs, file },
+                            &format!("This is of type {rhs_ty}.")
+                        )
+                    ],
+                    Some("Ensure those two types match by changing one of them.")
                 ),
             CompilerError::Custom(report) => report
         }
