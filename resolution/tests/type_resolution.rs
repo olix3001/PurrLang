@@ -119,3 +119,31 @@ fn resolve_field_types() {
     let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
     let _resolved = resolve(&ast, &names).unwrap();
 }
+
+#[test]
+#[should_panic]
+fn trigger_requires_void_mismatch() {
+    const SOURCE: &str = "
+        @green_flag {
+            let a = 1;
+            a
+        }
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let _resolved = resolve(&ast, &names).unwrap();
+}
+
+#[test]
+fn trigger_requires_void() {
+    const SOURCE: &str = "
+        @green_flag {
+            let a = 1;
+        }
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let _resolved = resolve(&ast, &names).unwrap();
+}

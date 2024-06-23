@@ -216,7 +216,36 @@ pub fn resolve_item_statements(
                 }
                 notes.expected_ret_ty = None;
                 notes.expected_block_ty = None;
-            }
+            },
+            ast::ItemKind::Trigger(trigger) => {
+                notes.expected_ret_ty = Some((
+                    ResolvedTy::Void,
+                    item.pos.clone()
+                ));
+                notes.expected_block_ty = Some((
+                    ResolvedTy::Void,
+                    item.pos.clone()
+                ));
+                let block_return_type = resolve_statements(
+                    &trigger.body,
+                    resolved,
+                    &mut Stack::new(),
+                    notes
+                )?;
+                if block_return_type != ResolvedTy::Void {
+                    return Err(CompilerError::MismatchedTypes {
+                        pos: item.pos.clone(),
+                        lhs: item.pos.clone(),
+                        lhs_ty: ResolvedTy::Void.pretty_name(&notes.project_tree),
+                        rhs: trigger.body.last().map(|rhs| rhs.pos.clone())
+                            .unwrap_or(item.pos.clone()).clone(),
+                        rhs_ty: block_return_type.pretty_name(&notes.project_tree),
+                        file: notes.current_file.clone()
+                    });
+                }
+                notes.expected_ret_ty = None;
+                notes.expected_block_ty = None;
+            },
             _ => {}
         }
     }
