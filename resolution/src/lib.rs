@@ -107,18 +107,20 @@ impl ResolvedTy {
         &self,
         target: &Self,
         resolved: &ResolvedData,
-        _notes: &ResolutionNotes
+        notes: &ResolutionNotes
     ) -> bool {
         match (self, target) {
             (ResolvedTy::Struct(fields_a), ResolvedTy::Path(target_path)) => {
                 let Some(ResolvedTy::Struct(fields_b)) = resolved.types.get(target_path)
                     else { return false; };
-                fields_a == fields_b
+                if fields_a.len() != fields_b.len() { return false; }
+                fields_a.iter().zip(fields_b.iter()).all(|(a, b)| a.1.matches(b.1, resolved, notes))
             },
             (ResolvedTy::Path(source_path), ResolvedTy::Struct(fields_b)) => {
                 let Some(ResolvedTy::Struct(fields_a)) = resolved.types.get(source_path)
                     else { return false; };
-                fields_a == fields_b
+                if fields_a.len() != fields_b.len() { return false; }
+                fields_a.iter().zip(fields_b.iter()).all(|(a, b)| a.1.matches(b.1, resolved, notes))
             },
             (a, b) => a == b
         }
@@ -130,6 +132,27 @@ impl ResolvedTy {
                 resolved.types.get(path).unwrap().resolve_to_top(resolved)
             },
             other => other.clone()
+        }
+    }
+
+    pub fn size(&self, resolved: &ResolvedData) -> usize {
+        match self.resolve_to_top(resolved) {
+            Self::Void => 0,
+            Self::Text => 1,
+            Self::Bool => 1,
+            Self::Number => 1,
+            Self::Never => 0,
+            Self::Path(_) => unreachable!(),
+            Self::TyVar(_) => unimplemented!(),
+            Self::Function(_, _) => panic!("Function type is not sized"),
+            Self::Struct(fields) => {
+                let mut size = 0;
+                for field in fields.iter() {
+                    size += field.1.size(resolved);
+                }
+                size
+            },
+            Self::Ptr => panic!("Ptr cannot be used as value")
         }
     }
 }
