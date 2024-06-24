@@ -59,6 +59,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "compiler"
+version = "0.1.0"
+dependencies = [
+ "codegen",
+ "parser",
+ "resolution",
+]
+
+[[package]]
 name = "error"
 version = "0.1.0"
 dependencies = [
