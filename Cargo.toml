@@ -3,7 +3,7 @@ repository = "https://github.com/olix3001/PurrLang"
 
 [workspace]
 resolver = "2"
-members = [".", "common", "error", "parser", "resolution"]
+members = [".", "codegen", "common", "error", "parser", "resolution"]
 
 [workspace.dependencies]
 internment = "0.8.3"
@@ -11,3 +11,4 @@ common = { path = "./common" }
 error = { path = "./error" }
 parser = { path = "./parser" }
 resolution = { path = "./resolution" }
+codegen = { path = "./codegen" }
