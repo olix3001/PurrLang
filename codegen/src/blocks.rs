@@ -6,14 +6,14 @@ use crate::DataId;
 
 #[derive(Default, Debug, Clone, Serialize)]
 pub struct Sb3Code {
-    blocks: HashMap<DataId, Sb3Block>,
-    variables: HashMap<DataId, Sb3Variable>
+    pub blocks: HashMap<DataId, Sb3Block>,
+    pub variables: HashMap<DataId, Sb3Variable>
 }
 
 #[derive(Debug, Clone)]
 pub struct Sb3Variable {
-    name: String,
-    value: usize
+    pub name: String,
+    pub value: usize
 }
 
 impl Serialize for Sb3Variable {
@@ -38,15 +38,15 @@ impl Sb3Variable {
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sb3Block {
-    opcode: String,
-    next: Option<DataId>,
-    parent: Option<DataId>,
-    inputs: HashMap<String, Sb3Input>,
-    fields: HashMap<String, Sb3Input>,
-    shadow: bool,
-    top_level: bool,
-    x: Option<i32>,
-    y: Option<i32>
+    pub opcode: String,
+    pub next: Option<DataId>,
+    pub parent: Option<DataId>,
+    pub inputs: HashMap<String, Sb3Input>,
+    pub fields: HashMap<String, Sb3Input>,
+    pub shadow: bool,
+    pub top_level: bool,
+    pub x: Option<i32>,
+    pub y: Option<i32>
 }
 
 #[derive(Default, Debug, Clone)]

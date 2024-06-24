@@ -9,6 +9,10 @@ pub struct DataId(String);
 impl DataId {
     pub fn new() -> Self {
         let id = DATA_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Self(format!("{id:08x}"))
+        Self(format!("D{id:08x}"))
     }
+}
+
+pub fn build_project_json(code: &blocks::Sb3Code) -> Result<String, serde_json::Error> {
+    serde_json::to_string(code)
 }

@@ -7,6 +7,8 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common.workspace = true
 codegen.workspace = true
 parser.workspace = true
+error.workspace = true
 resolution.workspace = true
