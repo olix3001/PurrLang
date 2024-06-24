@@ -21,7 +21,15 @@ pub struct ResolutionNotes<'a> {
 #[derive(Default, Debug, Clone)]
 pub struct ResolvedData {
     pub types: HashMap<NodeId, ResolvedTy>,
-    pub variables: HashMap<NodeId, NodeId>
+    pub variables: HashMap<NodeId, NodeId>,
+    pub blocks: HashMap<NodeId, ResolvedBlock>,
+    pub signatures: HashMap<NodeId, Vec<NodeId>>
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedBlock {
+    opcode: String,
+    inputs: HashMap<String, NodeId>,
 }
 
 impl<'a> ResolutionNotes<'a> {
@@ -141,11 +149,20 @@ pub fn resolve_tl_types(
                 resolved.types.insert(
                     item.id, ty
                 );
+                resolved.signatures.insert(
+                    item.id,
+                    block.signature.arguments.iter().map(|arg| arg.id).collect()
+                );
             },
             ast::ItemKind::FunctionDefinition(function) => {
                 let ty = signature_to_resolved_ty(&function.signature, resolved, notes)?;
                 resolved.types.insert(
                     item.id, ty
+                );
+
+                resolved.signatures.insert(
+                    item.id,
+                    function.signature.arguments.iter().map(|arg| arg.id).collect()
                 );
             },
             ast::ItemKind::StructDefinition(struct_) => {
@@ -193,6 +210,31 @@ pub fn resolve_item_statements(
                 notes.current_path = path_temp;
                 notes.ast = ast_temp;
             },
+
+            ast::ItemKind::BlockDefinition(block) => {
+                let stack = Stack::from_signature(&block.signature);
+                let mut inputs = HashMap::new();
+
+                if let Some(field) = block.body.iter().find(|f| f.name == "inputs") {
+                    let ast::ExpressionKind::Path(path) = &field.value.kind else {
+                        todo!("Create error for when block.inputs is not a path");
+                    };
+                    // TODO: Ensure this path is of length 1.
+                    let origin = stack.find_variable_origin(&path.segments.last().unwrap().ident);
+                    inputs.insert(
+                        field.name.clone(),
+                        origin.unwrap().clone()
+                    );
+                }
+
+                resolved.blocks.insert(
+                    item.id,
+                    ResolvedBlock {
+                        opcode: block.opcode.clone(),
+                        inputs
+                    }
+                );
+            }
 
             ast::ItemKind::FunctionDefinition(definition) => {
                 let ResolvedTy::Function(_, return_type) = 

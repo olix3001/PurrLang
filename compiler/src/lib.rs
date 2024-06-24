@@ -82,5 +82,6 @@ pub fn compile_trigger(
     };
     let mut block = builder.block(opcode);
     block.top_level();
-    Ok(block.finish())
+    let block = block.finish();
+    Ok(block)
 }
