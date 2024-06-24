@@ -5,7 +5,35 @@ use serde::{Serialize, ser::{SerializeSeq, SerializeTuple}};
 use crate::DataId;
 
 #[derive(Default, Debug, Clone, Serialize)]
-pub struct Sb3Blocks(HashMap<DataId, Sb3Block>);
+pub struct Sb3Code {
+    blocks: HashMap<DataId, Sb3Block>,
+    variables: HashMap<DataId, Sb3Variable>
+}
+
+#[derive(Debug, Clone)]
+pub struct Sb3Variable {
+    name: String,
+    value: usize
+}
+
+impl Serialize for Sb3Variable {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer {
+        let mut tuple = serializer.serialize_tuple(2)?;
+        tuple.serialize_element(&self.name)?;
+        tuple.serialize_element(&self.value)?;
+        tuple.end()
+    }
+}
+
+impl Sb3Variable {
+    pub fn new(name: impl AsRef<str>) -> Self {
+        Self {
+            name: name.as_ref().to_string(),
+            value: 0
+        }
+    }
+}
 
 #[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,16 +97,16 @@ impl Serialize for Sb3Value {
 }
 
 pub struct BlocksBuilder<'a> {
-    blocks: &'a mut Sb3Blocks,
+    code: &'a mut Sb3Code,
     start_x: i32,
     start_y: i32,
     previous: Option<DataId>
 }
 
 impl<'a> BlocksBuilder<'a> {
-    pub fn new(blocks: &'a mut Sb3Blocks) -> Self {
+    pub fn new(code: &'a mut Sb3Code) -> Self {
         Self {
-            blocks,
+            code,
             start_x: 0,
             start_y: 0,
             previous: None
@@ -99,7 +127,7 @@ impl<'a> BlocksBuilder<'a> {
         if let Some(parent) = &self.previous {
             block.parent = Some(parent.clone());
 
-            if let Some(parent_block) = self.blocks.0.get_mut(parent) {
+            if let Some(parent_block) = self.code.blocks.get_mut(parent) {
                 parent_block.next = Some(id.clone());
             }
         } else {
@@ -107,11 +135,11 @@ impl<'a> BlocksBuilder<'a> {
             block.y = Some(self.start_y);
         }
 
-        self.blocks.0.insert(id.clone(), block);
+        self.code.blocks.insert(id.clone(), block);
 
         BlockBuilder::new(
             id.clone(),
-            self.blocks.0.get_mut(&id).unwrap()
+            self.code.blocks.get_mut(&id).unwrap()
         )
     }
 }
