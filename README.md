@@ -6,9 +6,9 @@ This is very experimental and is not guaranteed to be supported in the future.
 ## Current progress:
 - [x] Lexer
 - [x] Parser
-- [ ] Type/Variable resolution (in progress)
-- [ ] Code generation crate
-- [ ] Compiler
+- [x] Type/Variable resolution (requires more features)
+- [x] Code generation crate (requires more features)
+- [ ] Compiler (in progress)
 - [ ] Optimizer
 - [ ] CLI tool
 

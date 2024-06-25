@@ -31,6 +31,21 @@ impl Value {
                 let name = builder.get_variable_name(&id);
                 Ok(Sb3Value::Variable(id, name))
             },
+            Self::BlockCall(call) => {
+                {
+                    let mut block = builder.get_block_mut(&call);
+                    block.parent = Some(possible_parent.clone());
+                    block.next = None;
+                }
+                builder.set_previous(possible_parent.clone());
+                // Update all that had this as their next.
+                for block in builder.code_mut().blocks.values_mut() {
+                    if block.next.as_ref() == Some(&call) {
+                        block.next = Some(possible_parent.clone());
+                    }
+                }
+                Ok(Sb3Value::Ptr(call))
+            },
             _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch input.")
         }
     }

@@ -121,8 +121,7 @@ pub fn compile_statements(
                         &notes.variables.get(&stmt.id).unwrap().clone(),
                         value,
                         builder,
-                        notes,
-                        &DataId::from_numeric_id(0)
+                        notes
                     )?;
                 }
             }
@@ -137,7 +136,6 @@ fn write_variable(
     value: Value,
     builder: &mut BlocksBuilder,
     notes: &mut CompileNotes,
-    possible_parent: &DataId
 ) -> Result<(), CompilerError> {
     match &variable {
         Value::Variable(_) => {
@@ -149,7 +147,7 @@ fn write_variable(
             b.input(
                 "VALUE",
                 value.should_shadow(),
-                &[value.into_sb3(builder, possible_parent)?]
+                &[value.into_sb3(builder, b.id())?]
             );
         },
         Value::Struct(target) => {
@@ -162,7 +160,6 @@ fn write_variable(
                     source.get(field_name).unwrap().clone(),
                     builder,
                     notes,
-                    possible_parent
                 )?;
             }
         }
@@ -239,6 +236,15 @@ pub fn compile_expr(
             panic!("Path resolution went wrong... sorry :c");
         }
 
+        ast::ExpressionKind::Field(obj, field) => {
+            let obj = compile_expr(&*obj, builder, notes)?;
+            let Value::Struct(obj) = obj else {
+                panic!("Field access is only allowed on structs");
+            };
+
+            Ok(obj.get(field).unwrap().clone())
+        }
+
         ast::ExpressionKind::Call { callee, generics: _generics, arguments } => {
             let callee_val = compile_expr(callee, builder, notes)?;
 
@@ -271,6 +277,18 @@ pub fn compile_expr(
                     )
                 ))
             }
+        },
+
+        ast::ExpressionKind::StructLiteral(_, fields) |
+        ast::ExpressionKind::AnonStruct(fields) => {
+            let mut value = HashMap::new();
+            for field in fields.iter() {
+                value.insert(
+                    field.name.clone(),
+                    compile_expr(&field.value, builder, notes)?
+                );
+            }
+            Ok(Value::Struct(value))
         }
 
         _ => todo!()

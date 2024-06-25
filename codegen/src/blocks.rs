@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::{RefCell, RefMut}, collections::HashMap, rc::Rc};
 
 use serde::{Serialize, ser::{SerializeSeq, SerializeTuple}};
 
@@ -154,6 +154,27 @@ impl BlocksBuilder {
 
     pub fn finish(self) -> Option<Sb3Code> {
         Some(self.code.take()) // TODO: Add parent
+    }
+
+    pub fn code_mut(
+        &mut self
+    ) -> std::cell::RefMut<'_, Sb3Code> {
+        self.code.borrow_mut()
+    }
+
+    pub fn set_previous(
+        &mut self,
+        previous: DataId
+    ) {
+        self.data.borrow_mut().previous = Some(previous);
+    }
+
+    pub fn get_block_mut(
+        &mut self,
+        id: &DataId
+    ) -> std::cell::RefMut<'_, Sb3Block> {
+        let borrowed = self.code.borrow_mut();
+        RefMut::map(borrowed, |inner| inner.blocks.get_mut(id).unwrap())
     }
 
     pub fn define_variable(
