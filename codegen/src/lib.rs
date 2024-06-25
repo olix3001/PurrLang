@@ -11,6 +11,10 @@ impl DataId {
         let id = DATA_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Self(format!("D{id:08x}"))
     }
+
+    pub fn from_numeric_id(id: usize) -> Self {
+        Self(format!("D{id:08x}"))
+    }
 }
 
 pub fn build_project_json(code: &blocks::Sb3Code) -> Result<String, serde_json::Error> {

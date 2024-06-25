@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use serde::{Serialize, ser::{SerializeSeq, SerializeTuple}};
 
@@ -45,7 +45,9 @@ pub struct Sb3Block {
     pub fields: HashMap<String, Sb3Input>,
     pub shadow: bool,
     pub top_level: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub x: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub y: Option<i32>
 }
 
@@ -96,25 +98,35 @@ impl Serialize for Sb3Value {
     }
 }
 
-pub struct BlocksBuilder<'a> {
-    code: &'a mut Sb3Code,
-    start_x: i32,
-    start_y: i32,
+#[derive(Default)]
+struct InnerBuilderData {
     previous: Option<DataId>
 }
 
-impl<'a> BlocksBuilder<'a> {
-    pub fn new(code: &'a mut Sb3Code) -> Self {
+#[derive(Clone)]
+pub struct BlocksBuilder {
+    code: Rc<RefCell<Sb3Code>>,
+    start_x: i32,
+    start_y: i32,
+    data: Rc<RefCell<InnerBuilderData>>
+}
+
+impl BlocksBuilder {
+    pub fn new() -> Self {
         Self {
-            code,
+            code: Rc::new(RefCell::new(
+                Sb3Code::default()
+            )),
             start_x: 0,
             start_y: 0,
-            previous: None
+            data: Rc::new(RefCell::new(
+                InnerBuilderData::default()
+            ))
         }
     }
 
-    pub fn finish(self) -> Option<DataId> {
-        self.previous.clone()
+    pub fn finish(self) -> Option<Sb3Code> {
+        Some(self.code.take()) // TODO: Add parent
     }
 
     pub fn block(
@@ -123,11 +135,12 @@ impl<'a> BlocksBuilder<'a> {
     ) -> BlockBuilder {
         let id = DataId::new();
         let mut block = Sb3Block::default();
+        let mut code = self.code.borrow_mut();
         block.opcode = opcode.as_ref().to_string();
-        if let Some(parent) = &self.previous {
+        if let Some(parent) = &self.data.borrow().previous {
             block.parent = Some(parent.clone());
 
-            if let Some(parent_block) = self.code.blocks.get_mut(parent) {
+            if let Some(parent_block) = code.blocks.get_mut(parent) {
                 parent_block.next = Some(id.clone());
             }
         } else {
@@ -135,34 +148,36 @@ impl<'a> BlocksBuilder<'a> {
             block.y = Some(self.start_y);
         }
 
-        self.code.blocks.insert(id.clone(), block);
-
         BlockBuilder::new(
             id.clone(),
-            self.code.blocks.get_mut(&id).unwrap()
+            block,
+            self.clone()
         )
     }
 }
 
-pub struct BlockBuilder<'a> {
+pub struct BlockBuilder {
     id: DataId,
-    block: &'a mut Sb3Block
+    block: Option<Sb3Block>,
+    builder: BlocksBuilder
 }
 
-impl<'a> BlockBuilder<'a> {
-    fn new(id: DataId, block: &'a mut Sb3Block) -> Self {
-        Self { id, block }
+impl BlockBuilder {
+    fn new(id: DataId, block: Sb3Block, builder: BlocksBuilder) -> Self {
+        Self { id, block: Some(block), builder }
     }
 
-    pub fn finish(self) -> DataId { self.id }
+    pub fn finish(self) -> DataId { self.id.clone() }
+
+    pub fn id(&self) -> &DataId { &self.id }
 
     pub fn top_level(&mut self) -> &mut Self {
-        self.block.top_level = true;
+        self.block.as_mut().unwrap().top_level = true;
         self
     }
 
     pub fn shadow(&mut self) -> &mut Self {
-        self.block.shadow = true;
+        self.block.as_mut().unwrap().shadow = true;
         self
     }
 
@@ -172,7 +187,7 @@ impl<'a> BlockBuilder<'a> {
         is_shadow: bool,
         values: &[Sb3Value]
     ) -> &mut Self {
-        self.block.inputs.insert(
+        self.block.as_mut().unwrap().inputs.insert(
             name.as_ref().to_string(),
             Sb3Input {
                 kind: if is_shadow { 1 } else { 2 },
@@ -180,5 +195,17 @@ impl<'a> BlockBuilder<'a> {
             }
         );
         self
+    }
+}
+
+impl Drop for BlockBuilder {
+    fn drop(&mut self) {
+        self.builder.code.borrow_mut()
+            .blocks.insert(
+                self.id.clone(),
+                self.block.take().unwrap()
+            );
+        self.builder.data.borrow_mut()
+            .previous = Some(self.id.clone());
     }
 }

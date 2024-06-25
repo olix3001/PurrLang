@@ -28,8 +28,8 @@ pub struct ResolvedData {
 
 #[derive(Debug, Clone)]
 pub struct ResolvedBlock {
-    opcode: String,
-    inputs: HashMap<String, NodeId>,
+    pub opcode: String,
+    pub inputs: Vec<String>,
 }
 
 impl<'a> ResolutionNotes<'a> {
@@ -212,19 +212,32 @@ pub fn resolve_item_statements(
             },
 
             ast::ItemKind::BlockDefinition(block) => {
-                let stack = Stack::from_signature(&block.signature);
-                let mut inputs = HashMap::new();
+                let mut stack = Stack::from_signature(&block.signature);
+                let mut inputs = vec![
+                    "".to_string();
+                    block.signature.arguments.len()
+                ];
 
-                if let Some(field) = block.body.iter().find(|f| f.name == "inputs") {
-                    let ast::ExpressionKind::Path(path) = &field.value.kind else {
-                        todo!("Create error for when block.inputs is not a path");
-                    };
-                    // TODO: Ensure this path is of length 1.
-                    let origin = stack.find_variable_origin(&path.segments.last().unwrap().ident);
-                    inputs.insert(
-                        field.name.clone(),
-                        origin.unwrap().clone()
-                    );
+                if let Some(inputs_field) = block.body.iter().find(|f| f.name == "inputs") {
+                    let ast::ExpressionKind::AnonStruct(fields) = &inputs_field.value.kind
+                        else { panic!("Value for inputs is not AnonStruct") };
+                    for field in fields.iter() {
+                        let ast::ExpressionKind::Path(path) = &field.value.kind else {
+                            todo!("Create error for when block.inputs is not a path. Got {:?}", field.value);
+                        };
+                        // This guarantees this expression exists.
+                        let _ = resolve_expr(&field.value, resolved, &mut stack, notes)?;
+                        // TODO: Ensure this path is of length 1.
+                        let origin = stack.find_variable_origin(&path.segments.last().unwrap().ident);
+                        let origin_index = block.signature.arguments.iter()
+                            .position(|arg| Some(arg.id) == origin);
+                        if let Some(origin_index) = origin_index {
+                            if inputs[origin_index] != "" {
+                                panic!("Temporary Error: Block arguments may be used only once") 
+                            }
+                            inputs[origin_index] = field.name.clone();
+                        } else { unreachable!("Block definition inputs value cannot be path/undefined.") }
+                    }
                 }
 
                 resolved.blocks.insert(
@@ -437,10 +450,14 @@ pub fn resolve_expr(
                 }
             }
 
-            resolve_ty(&ast::Ty {
+            let resolved_ty = resolve_ty(&ast::Ty {
                 kind: ast::TyKind::Path(path.clone()),
                 pos: 0..0
-            }, notes)?
+            }, notes)?;
+
+            resolved.types.insert(expr.id, resolved_ty.clone());
+
+            resolved_ty
         },
 
         ast::ExpressionKind::Field(obj, field) => {
