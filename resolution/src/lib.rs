@@ -109,18 +109,14 @@ impl ResolvedTy {
         resolved: &ResolvedData,
         notes: &ResolutionNotes
     ) -> bool {
-        match (self, target) {
-            (ResolvedTy::Struct(fields_a), ResolvedTy::Path(target_path)) => {
-                let Some(ResolvedTy::Struct(fields_b)) = resolved.types.get(target_path)
-                    else { return false; };
+        match (&self.resolve_to_top(resolved), &target.resolve_to_top(resolved)) {
+            (ResolvedTy::Struct(fields_a), ResolvedTy::Struct(fields_b)) => {
                 if fields_a.len() != fields_b.len() { return false; }
-                fields_a.iter().zip(fields_b.iter()).all(|(a, b)| a.1.matches(b.1, resolved, notes))
-            },
-            (ResolvedTy::Path(source_path), ResolvedTy::Struct(fields_b)) => {
-                let Some(ResolvedTy::Struct(fields_a)) = resolved.types.get(source_path)
-                    else { return false; };
-                if fields_a.len() != fields_b.len() { return false; }
-                fields_a.iter().zip(fields_b.iter()).all(|(a, b)| a.1.matches(b.1, resolved, notes))
+                for (name_a, value_a) in fields_a.iter() {
+                    let Some(value_b) = fields_b.get(name_a) else { return false };
+                    if !value_a.matches(value_b, resolved, notes) { return false }
+                }
+                true
             },
             (a, b) => a == b
         }
