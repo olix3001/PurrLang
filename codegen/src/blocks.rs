@@ -42,7 +42,7 @@ pub struct Sb3Block {
     pub next: Option<DataId>,
     pub parent: Option<DataId>,
     pub inputs: HashMap<String, Sb3Input>,
-    pub fields: HashMap<String, Sb3Input>,
+    pub fields: HashMap<String, Sb3Field>,
     pub shadow: bool,
     pub top_level: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -70,10 +70,30 @@ impl Serialize for Sb3Input {
 }
 
 #[derive(Debug, Clone)]
+pub enum Sb3Field {
+    Variable(DataId, String)
+}
+
+impl Serialize for Sb3Field {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer {
+        match &self {
+            Self::Variable(id, name) => {
+                let mut tuple = serializer.serialize_tuple(2)?;
+                tuple.serialize_element(&name)?;
+                tuple.serialize_element(&id)?;
+                tuple.end()
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Sb3Value {
     Ptr(DataId),
     Text(String),
-    Number(f64)
+    Number(f64),
+    Variable(DataId, String)
 }
 
 impl Serialize for Sb3Value {
@@ -92,6 +112,13 @@ impl Serialize for Sb3Value {
                 let mut tuple = serializer.serialize_tuple(2)?;
                 tuple.serialize_element(&4)?;
                 tuple.serialize_element(number)?;
+                tuple.end()
+            },
+            Self::Variable(variable, name) => {
+                let mut tuple = serializer.serialize_tuple(3)?;
+                tuple.serialize_element(&12)?;
+                tuple.serialize_element(name)?;
+                tuple.serialize_element(variable)?;
                 tuple.end()
             }
         }
@@ -127,6 +154,27 @@ impl BlocksBuilder {
 
     pub fn finish(self) -> Option<Sb3Code> {
         Some(self.code.take()) // TODO: Add parent
+    }
+
+    pub fn define_variable(
+        &mut self,
+        display_name: impl AsRef<str>
+    ) -> DataId {
+        let mut code = self.code.borrow_mut();
+        let id = DataId::new();
+        code.variables.insert(
+            id.clone(),
+            Sb3Variable::new(display_name)
+        );
+        id
+    }
+
+    pub fn get_variable_name(
+        &self,
+        id: &DataId
+    ) -> String {
+        self.code.borrow().variables.get(id)
+            .unwrap().name.clone()
     }
 
     pub fn block(
@@ -193,6 +241,18 @@ impl BlockBuilder {
                 kind: if is_shadow { 1 } else { 2 },
                 values: values.to_vec()
             }
+        );
+        self
+    }
+
+    pub fn field(
+        &mut self,
+        name: impl AsRef<str>,
+        field: Sb3Field
+    ) -> &mut Self {
+        self.block.as_mut().unwrap().fields.insert(
+            name.as_ref().to_string(),
+            field
         );
         self
     }

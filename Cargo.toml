@@ -7,6 +7,7 @@ members = [".", "codegen", "common", "compiler", "error", "parser", "resolution"
 
 [workspace.dependencies]
 internment = "0.8.3"
+ahash = "0.8.11"
 
 common = { path = "./common" }
 error = { path = "./error" }

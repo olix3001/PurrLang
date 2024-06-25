@@ -1,7 +1,8 @@
+use ahash::{HashMap, HashMapExt};
 use codegen::{DataId, blocks::{Sb3Code, BlocksBuilder}};
 use common::{FileRange, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
-use parser::ast;
+use parser::ast::{self, NodeId};
 use resolution::{resolve::ResolvedData, ResolvedTy};
 use value::Value;
 
@@ -10,7 +11,8 @@ pub mod value;
 #[derive(Debug, Clone)]
 pub struct CompileNotes<'a> {
     current_file: PurrSource,
-    resolved_data: &'a ResolvedData
+    resolved_data: &'a ResolvedData,
+    variables: HashMap<NodeId, Value>
 }
 
 pub fn compile_purr(
@@ -20,7 +22,8 @@ pub fn compile_purr(
 ) -> Result<Sb3Code, CompilerError> {
     let mut notes = CompileNotes {
         current_file: source,
-        resolved_data
+        resolved_data,
+        variables: HashMap::new()
     };
     let mut builder = BlocksBuilder::new();
 
@@ -102,10 +105,107 @@ pub fn compile_statements(
             ast::StatementKind::Expr(expr) => {
                 compile_expr(expr, builder, notes)?;
             }
+            ast::StatementKind::LetDefinition(definition) => {
+                let ty = notes.resolved_data.types.get(&stmt.id).unwrap();
+                let variable = define_variables_for_type(
+                    &definition.symbol,
+                    stmt.id,
+                    ty,
+                    builder,
+                    notes
+                )?;
+                notes.variables.insert(stmt.id, variable);
+                if let Some(value) = &definition.value {
+                    let value = compile_expr(value, builder, notes)?;
+                    write_variable(
+                        &notes.variables.get(&stmt.id).unwrap().clone(),
+                        value,
+                        builder,
+                        notes,
+                        &DataId::from_numeric_id(0)
+                    )?;
+                }
+            }
             _ => todo!()
         }
     }
     Ok(())
+}
+
+fn write_variable(
+    variable: &Value,
+    value: Value,
+    builder: &mut BlocksBuilder,
+    notes: &mut CompileNotes,
+    possible_parent: &DataId
+) -> Result<(), CompilerError> {
+    match &variable {
+        Value::Variable(_) => {
+            let mut b = builder.block("data_setvariableto");
+            b.field(
+                "VARIABLE", 
+                variable.as_sb3_field(builder)?
+            );
+            b.input(
+                "VALUE",
+                value.should_shadow(),
+                &[value.into_sb3(builder, possible_parent)?]
+            );
+        },
+        Value::Struct(target) => {
+            let Value::Struct(source) = value else {
+                panic!("Only struct can be assigned to struct");
+            };
+            for (field_name, field_value) in target.iter() {
+                write_variable(
+                    field_value,
+                    source.get(field_name).unwrap().clone(),
+                    builder,
+                    notes,
+                    possible_parent
+                )?;
+            }
+        }
+        _ => panic!("value {value:?} is not writable!")
+    }
+    Ok(())
+}
+
+fn define_variables_for_type(
+    prefix: &str,
+    node_id: NodeId,
+    ty: &ResolvedTy,
+    builder: &mut BlocksBuilder,
+    notes: &mut CompileNotes
+) -> Result<Value, CompilerError> {
+    let ty = ty.resolve_to_top(&notes.resolved_data);
+    match ty {
+        ResolvedTy::Text | ResolvedTy::Number | ResolvedTy::Bool => {
+            let id = builder.define_variable(
+                format!("{prefix}@{:04x}", node_id.num())
+            );
+            Ok(Value::Variable(id))
+        }
+        
+        ResolvedTy::Struct(struct_) => {
+            let mut values = HashMap::new();
+            for (field_name, field_value) in struct_.iter() {
+                let value = define_variables_for_type(
+                    &format!("{prefix}.{field_name}"),
+                    node_id,
+                    &field_value,
+                    builder,
+                    notes
+                )?; 
+
+                values.insert(field_name.to_string(), value);
+            }
+
+            Ok(Value::Struct(values))
+        }
+
+        _ => {Ok(Value::Empty)}
+    }
 }
 
 pub fn compile_expr(
@@ -129,8 +229,14 @@ pub fn compile_expr(
                 }
                 // TODO: FunctionRef.
             }
+ 
+            if let Some(def_id) = notes.resolved_data.variables.get(&expr.id) {
+                if let Some(variable) = notes.variables.get(def_id) {
+                    return Ok(variable.clone());
+                }
+            }
 
-            unimplemented!("Variables are not implemented yet")
+            panic!("Path resolution went wrong... sorry :c");
         }
 
         ast::ExpressionKind::Call { callee, generics: _generics, arguments } => {

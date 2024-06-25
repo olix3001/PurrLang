@@ -1,4 +1,5 @@
-use codegen::{blocks::{BlocksBuilder, Sb3Value}, DataId};
+use ahash::HashMap;
+use codegen::{blocks::{BlocksBuilder, Sb3Field, Sb3Value}, DataId};
 use error::CompilerError;
 use resolution::resolve::ResolvedBlock;
 
@@ -6,10 +7,13 @@ use crate::CompileNotes;
 
 #[derive(Debug, Clone)]
 pub enum Value {
+    Empty,
     Text(String),
     Number(f64),
     BlockRef(ResolvedBlock),
-    BlockCall(DataId)
+    BlockCall(DataId),
+    Variable(DataId),
+    Struct(HashMap<String, Value>)
 }
 
 impl Value {
@@ -23,7 +27,24 @@ impl Value {
                 Ok(Sb3Value::Text(text)),
             Self::Number(number) =>
                 Ok(Sb3Value::Number(number)),
-            _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch")
+            Self::Variable(id) => {
+                let name = builder.get_variable_name(&id);
+                Ok(Sb3Value::Variable(id, name))
+            },
+            _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch input.")
+        }
+    }
+
+    pub fn as_sb3_field(
+        &self,
+        builder: &mut BlocksBuilder,
+    ) -> Result<Sb3Field, CompilerError> {
+        match self {
+            Self::Variable(id) => {
+                let name = builder.get_variable_name(&id);
+                Ok(Sb3Field::Variable(id.clone(), name))
+            },
+            _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch field.")
         }
     }
 

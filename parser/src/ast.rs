@@ -16,6 +16,8 @@ impl NodeId {
     pub fn next() -> Self {
         Self(NODE_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
     }
+
+    pub fn num(&self) -> u64 { self.0 }
 }
 
 #[derive(Debug, Clone, PartialEq)]

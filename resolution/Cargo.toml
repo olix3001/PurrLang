@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ahash = "0.8.11"
-
+ahash.workspace = true
 error.workspace = true
 parser.workspace = true
 common.workspace = true

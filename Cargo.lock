@@ -62,6 +62,7 @@ dependencies = [
 name = "compiler"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "codegen",
  "common",
  "error",
