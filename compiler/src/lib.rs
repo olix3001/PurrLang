@@ -15,7 +15,8 @@ pub struct CompileNotes<'a> {
     variables: HashMap<NodeId, Value>,
     proc_definitions: HashMap<NodeId, Sb3FunctionDefinition>,
     proc_returns: HashMap<NodeId, Value>,
-    current_proc_return: Option<Value>
+    current_proc_return: Option<Value>,
+    current_args: Option<HashMap<NodeId, Value>>
 }
 
 pub fn compile_purr(
@@ -30,6 +31,7 @@ pub fn compile_purr(
         proc_definitions: HashMap::new(),
         proc_returns: HashMap::new(),
         current_proc_return: None,
+        current_args: None
     };
     let mut builder = BlocksBuilder::new();
 
@@ -86,6 +88,23 @@ pub fn compile_items(
                     )
                 );
 
+                let mut current_args = HashMap::new();
+                let argument_flat = function_args.iter()
+                    .map(|(arg, arg_ty)| Value::Argument(arg.clone(), *arg_ty == ArgumentTy::Boolean))
+                    .collect::<Vec<_>>();
+                let mut argument_flat_iter = argument_flat.into_iter();
+                for arg in definition.signature.arguments.iter() {
+                    let ty = notes.resolved_data.types.get(&arg.id).unwrap();
+
+                    current_args.insert(
+                        arg.id,
+                        Value::from_flat_and_ty(
+                            &ty, &mut argument_flat_iter,
+                            &notes.resolved_data
+                        )
+                    );
+                }
+
                 notes.proc_definitions.insert(item.id, def);
 
                 let ResolvedTy::Function(_, return_ty) = 
@@ -100,8 +119,11 @@ pub fn compile_items(
                 )?;
 
                 notes.current_proc_return = Some(return_value);
+                notes.current_args = Some(current_args);
                 compile_statements(&definition.body, &mut subbuilder, notes)?;
                 notes.proc_returns.insert(item.id, notes.current_proc_return.take().unwrap());
+                notes.current_proc_return = None;
+                notes.current_args = None;
             }
             _ => {}
         }
@@ -277,6 +299,12 @@ pub fn compile_expr(
             if let Some(def_id) = notes.resolved_data.variables.get(&expr.id) {
                 if let Some(variable) = notes.variables.get(def_id) {
                     return Ok(variable.clone());
+                }
+
+                if let Some(args) = &notes.current_args {
+                    if let Some(argument) = args.get(def_id) {
+                        return Ok(argument.clone());
+                    }
                 }
             }
 

@@ -1,8 +1,8 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 use codegen::{blocks::{BlocksBuilder, Sb3Field, Sb3Value}, DataId};
 use error::CompilerError;
 use parser::ast::NodeId;
-use resolution::resolve::ResolvedBlock;
+use resolution::{resolve::{ResolvedBlock, ResolvedData}, ResolvedTy};
 
 use crate::CompileNotes;
 
@@ -15,7 +15,8 @@ pub enum Value {
     FunctionRef(NodeId),
     BlockCall(DataId),
     Variable(DataId),
-    Struct(HashMap<String, Value>)
+    Struct(HashMap<String, Value>),
+    Argument(String, bool)
 }
 
 impl Value {
@@ -64,6 +65,18 @@ impl Value {
                 }
                 Ok(Sb3Value::Ptr(call))
             },
+            Self::Argument(name, is_bool_arg) => {
+                let mut b = builder.block(
+                    if is_bool_arg { "argument_reporter_boolean" }
+                    else { "argument_reporter_string_number" }
+                );
+
+                b
+                    .parent(possible_parent.clone())
+                    .field("VALUE", Sb3Field::Argument(name));
+
+                Ok(Sb3Value::Ptr(b.finish()))
+            },
             _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch input.")
         }
     }
@@ -78,6 +91,32 @@ impl Value {
                 Ok(Sb3Field::Variable(id.clone(), name))
             },
             _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch field.")
+        }
+    }
+
+    pub fn from_flat_and_ty(
+        ty: &ResolvedTy,
+        flat: &mut dyn Iterator<Item = Value>,
+        resolved: &ResolvedData
+    ) -> Self {
+        match ty.resolve_to_top(resolved) {
+            ResolvedTy::Struct(fields) => {
+                let mut v = HashMap::new();
+                let mut keys: Vec<&String> = fields.keys().collect();
+                keys.sort();
+                for key in keys.iter() {
+                    v.insert(
+                        (*key).to_string(),
+                        Self::from_flat_and_ty(
+                            fields.get(*key).unwrap(),
+                            flat,
+                            resolved
+                        )
+                    );
+                }
+                Value::Struct(v)
+            },
+            _ => flat.next().unwrap()
         }
     }
 }

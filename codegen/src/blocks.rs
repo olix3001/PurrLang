@@ -205,7 +205,7 @@ pub enum ArgumentTy {
 #[derive(Default, Debug, Clone)]
 pub struct Sb3FunctionDefinition {
     warp: bool,
-    arguments: Vec<String>,
+    pub arguments: Vec<String>,
     proccode: String
 }
 
@@ -337,12 +337,12 @@ impl BlocksBuilder {
             let mutation = proto.mutation.as_mut().unwrap();
             mutation.warp = warp;
             mutation.proccode = format!(
-                "{}( {} )", 
+                "{} {}", 
                 name.as_ref(),
                 arguments.iter().map(|arg|
                     if arg.1 == ArgumentTy::TextOrNumber { "%s" }
                     else { "%b" }
-                ).collect::<Vec<_>>().join(" , ")
+                ).collect::<Vec<_>>().join(" ")
             );
             definition.proccode = mutation.proccode.clone();
         }
@@ -393,12 +393,13 @@ impl BlocksBuilder {
 pub struct BlockBuilder {
     id: DataId,
     block: Option<Sb3Block>,
-    builder: BlocksBuilder
+    builder: BlocksBuilder,
+    skip_set_previous: bool,
 }
 
 impl BlockBuilder {
     fn new(id: DataId, block: Sb3Block, builder: BlocksBuilder) -> Self {
-        Self { id, block: Some(block), builder }
+        Self { id, block: Some(block), builder, skip_set_previous: false }
     }
 
     pub fn finish(self) -> DataId { self.id.clone() }
@@ -420,7 +421,15 @@ impl BlockBuilder {
         block.parent = Some(id.clone());
         block.x = None;
         block.y = None;
+        block.next = None;
+        for block in self.builder.code_mut().blocks.values_mut() {
+            if block.next.as_ref() == Some(&self.id) {
+                block.next = Some(id.clone());
+            }
+        }
         self.builder.data.borrow_mut().previous = Some(id);
+        self.skip_set_previous = true;
+
         self
     }
 
@@ -459,7 +468,9 @@ impl Drop for BlockBuilder {
                 self.id.clone(),
                 self.block.take().unwrap()
             );
-        self.builder.data.borrow_mut()
-            .previous = Some(self.id.clone());
+        if !self.skip_set_previous {
+            self.builder.data.borrow_mut()
+                .previous = Some(self.id.clone());
+        }
     }
 }

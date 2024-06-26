@@ -5,14 +5,14 @@ use parser::parser::parse_purr;
 use resolution::{project_tree::ProjectTree, resolve::resolve};
 
 #[test]
-fn compile_single_variable() {
+fn compile_single_argument_procedure() {
     const SOURCE: &str = "
         block say(MESSAGE: text) looks_say {
             inputs: .{ MESSAGE }
         }
 
         def greet(user: text) {
-            say(\"Hello World\");
+            say(user);
         }
 
         @green_flag {}
@@ -28,8 +28,35 @@ fn compile_single_variable() {
         &resolved
     ).unwrap();
 
-    panic!("code: \n\n{}\n\n", build_project_json(&code).unwrap());
+    assert_eq!(code.blocks.len(), 6);
+}
 
-    assert_eq!(code.blocks.len(), 3);
-    assert_eq!(code.variables.len(), 1);
+#[test]
+fn compile_struct_argument_procedure() {
+    const SOURCE: &str = "
+        block say(MESSAGE: text) looks_say {
+            inputs: .{ MESSAGE }
+        }
+
+        struct User { name: text, nick: text }
+
+        def greet(user: User) {
+            say(user.name);
+        }
+
+        @green_flag {}
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let resolved = resolve(&ast, &names).unwrap();
+
+    let code = compile_purr(
+        &ast.0,
+        PurrSource::Unknown,
+        &resolved
+    ).unwrap();
+
+    assert_eq!(code.blocks.len(), 7);
+    // TODO: Check correctness of ID's
 }
