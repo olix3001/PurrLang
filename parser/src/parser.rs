@@ -99,6 +99,7 @@ pub enum Token {
     #[token("void")] Void,
     #[token("number")] Number,
     #[token("text")] Text,
+    #[token("bool")] Bool,
 
     // ==< Values >==
     #[regex(r"([a-zA-Z_][a-zA-Z0-9_]*)")]
@@ -137,7 +138,7 @@ impl<'src> Token {
             StringLit => "string literal",
             True | False => "boolean literal",
 
-            Void | Number | Text | Ptr => "type",
+            Void | Number | Text | Ptr | Bool => "type",
         }
     }
 }
@@ -820,6 +821,7 @@ pub fn parse_ty(
         Some(Token::Void) => ast::TyKind::Void,
         Some(Token::Number) => ast::TyKind::Number,
         Some(Token::Text) => ast::TyKind::Text,
+        Some(Token::Bool) => ast::TyKind::Bool,
         Some(Token::Bang) => ast::TyKind::Never,
         Some(Token::Ptr) => ast::TyKind::Ptr,
         Some(Token::Period) => ast::TyKind::AnonStruct(

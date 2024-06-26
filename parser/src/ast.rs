@@ -215,6 +215,7 @@ pub enum TyKind {
 
     Number,
     Text,
+    Bool,
 
     AnonStruct(Vec<TypeField>),
     Path(PurrPath),

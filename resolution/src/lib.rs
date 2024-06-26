@@ -37,6 +37,7 @@ impl ResolvedTy {
             ast::TyKind::Void => Ok(Self::Void),
             ast::TyKind::Ptr => Ok(Self::Ptr),
             ast::TyKind::Number => Ok(Self::Number),
+            ast::TyKind::Bool => Ok(Self::Bool),
             ast::TyKind::Text => Ok(Self::Text),
             ast::TyKind::Path(path) => {
                 // Maybe we need to resolve first segment from import.
