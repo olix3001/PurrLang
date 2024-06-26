@@ -113,16 +113,7 @@ pub fn compile_items(
 
                 notes.proc_definitions.insert(item.id, def);
 
-                let ResolvedTy::Function(_, return_ty) = 
-                    notes.resolved_data.types.get(&item.id).unwrap()
-                    else { unreachable!() };
-                let return_value = define_variables_for_type(
-                    &format!("ret:{}", definition.name),
-                    item.id,
-                    &return_ty,
-                    builder,
-                    notes
-                )?;
+                let return_value = get_proc_return(item.id, builder, notes)?;
 
                 notes.current_proc_return = Some(return_value);
                 notes.current_args = Some(current_args);
@@ -135,6 +126,29 @@ pub fn compile_items(
         }
     }
     Ok(())
+}
+
+fn get_proc_return(
+    node_id: NodeId,
+    builder: &mut BlocksBuilder,
+    notes: &mut CompileNotes
+) -> Result<Value, CompilerError> {
+    if let Some(value) = notes.proc_returns.get(&node_id) {
+        return Ok(value.clone());
+    }
+
+    let f_name = notes.resolved_data.names.get(&node_id).unwrap().clone();
+    let f_ty = notes.resolved_data.types.get(&node_id).unwrap().clone();
+    let ResolvedTy::Function(_, ret_ty) = &f_ty else { unreachable!() };
+    let value = define_variables_for_type(
+        &format!("ret:{f_name}"),
+        node_id,
+        ret_ty,
+        builder,
+        notes
+    )?;
+    notes.proc_returns.insert(node_id, value.clone());
+    Ok(value)
 }
 
 fn get_or_prepare_function_arguments(

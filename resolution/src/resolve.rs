@@ -21,6 +21,7 @@ pub struct ResolutionNotes<'a> {
 #[derive(Default, Debug, Clone)]
 pub struct ResolvedData {
     pub types: HashMap<NodeId, ResolvedTy>,
+    pub names: HashMap<NodeId, String>,
     pub variables: HashMap<NodeId, NodeId>,
     pub blocks: HashMap<NodeId, ResolvedBlock>,
     pub signatures: HashMap<NodeId, Vec<NodeId>>
@@ -159,6 +160,8 @@ pub fn resolve_tl_types(
                 resolved.types.insert(
                     item.id, ty
                 );
+
+                resolved.names.insert(item.id, function.name.clone());
 
                 resolved.signatures.insert(
                     item.id,
