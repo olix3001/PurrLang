@@ -80,9 +80,15 @@ pub fn compile_items(
                         ));
                     }
                 }
+                let ids = get_or_prepare_function_arguments(
+                    item.id,
+                    notes.resolved_data.types.get(&item.id).unwrap(),
+                    notes
+                );
                 let (mut subbuilder, def) = builder.define_function(
                     &definition.name,
                     function_args.as_slice(),
+                    ids.as_slice(),
                     item.attributes.tags.iter().any(|tag|
                         tag == &ast::AttributeTag::Marker("warp".to_string())
                     )
@@ -129,6 +135,33 @@ pub fn compile_items(
         }
     }
     Ok(())
+}
+
+fn get_or_prepare_function_arguments(
+    node_id: NodeId,
+    ty: &ResolvedTy,
+    notes: &mut CompileNotes
+) -> Vec<DataId> {
+    if let Some(def) = notes.proc_definitions.get(&node_id) {
+        return def.arguments.clone();
+    }
+    let mut ids = Vec::new();
+    let ResolvedTy::Function(args, _) = ty 
+        else { unreachable!("There is error in the compiler?") };
+    for arg in args.iter() {
+        for _ in 0..arg.size(&notes.resolved_data) {
+            let id = DataId::new();
+            ids.push(id);
+        }
+    }
+    notes.proc_definitions.insert(
+        node_id, Sb3FunctionDefinition {
+            arguments: ids.clone(),
+            ..Default::default()
+        }
+    );
+
+    ids
 }
 
 pub fn compile_trigger(

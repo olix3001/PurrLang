@@ -204,9 +204,9 @@ pub enum ArgumentTy {
 
 #[derive(Default, Debug, Clone)]
 pub struct Sb3FunctionDefinition {
-    warp: bool,
-    pub arguments: Vec<String>,
-    proccode: String
+    pub warp: bool,
+    pub arguments: Vec<DataId>,
+    pub proccode: String
 }
 
 impl BlocksBuilder {
@@ -302,7 +302,7 @@ impl BlocksBuilder {
     ) {
         let mut call = self.block("procedures_call");
         for (arg_id, arg) in definition.arguments.iter().zip(arguments.iter()) {
-            call.input(&arg_id, &[arg.clone()]);
+            call.input(&arg_id.0, &[arg.clone()]);
         }
 
         {
@@ -311,7 +311,8 @@ impl BlocksBuilder {
             let mutation = call.mutation.as_mut().unwrap();
             mutation.warp = definition.warp;
             mutation.proccode = definition.proccode.clone();
-            mutation.argumentids = definition.arguments.clone();
+            mutation.argumentids = definition.arguments.iter()
+                .map(|arg| arg.0.clone()).collect();
         }
     }
 
@@ -319,6 +320,7 @@ impl BlocksBuilder {
         &mut self,
         name: impl AsRef<str>,
         arguments: &[(String, ArgumentTy)],
+        argument_ids: &[DataId],
         warp: bool
     ) -> (Self, Sb3FunctionDefinition) {
         let mut subbuilder = Self::new();
@@ -348,8 +350,8 @@ impl BlocksBuilder {
         }
 
         let mut arg_ids = Vec::new();
-        for arg in arguments.iter() {
-            let id = DataId::new();
+        for (arg, id) in arguments.iter().zip(argument_ids.iter()) {
+            let id = id.clone();
             arg_ids.push(id.clone());
 
             let mut argdef = subbuilder.block(
@@ -376,7 +378,7 @@ impl BlocksBuilder {
                 else { "false" }.to_string()
             );
 
-            definition.arguments.push(id.0.clone());
+            definition.arguments.push(id);
         }
 
         proc_definition.input("custom_block", &[
