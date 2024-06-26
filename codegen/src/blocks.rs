@@ -48,7 +48,37 @@ pub struct Sb3Block {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub x: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub y: Option<i32>
+    pub y: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mutation: Option<Mutation>
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Mutation {
+    tag_name: &'static str,
+    children: [u8; 0],
+    proccode: String,
+    argumentids: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    argumentnames: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    argumentdefaults: Vec<String>,
+    warp: bool
+}
+
+impl Default for Mutation {
+    fn default() -> Self {
+        Self {
+            tag_name: "mutation",
+            children: [],
+            proccode: String::new(),
+            argumentids: Vec::new(),
+            argumentnames: Vec::new(),
+            argumentdefaults: Vec::new(),
+            warp: false
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -71,7 +101,8 @@ impl Serialize for Sb3Input {
 
 #[derive(Debug, Clone)]
 pub enum Sb3Field {
-    Variable(DataId, String)
+    Variable(DataId, String),
+    Argument(String)
 }
 
 impl Serialize for Sb3Field {
@@ -84,6 +115,12 @@ impl Serialize for Sb3Field {
                 tuple.serialize_element(&id)?;
                 tuple.end()
             }
+            Self::Argument(name) => {
+                let mut tuple = serializer.serialize_tuple(2)?;
+                tuple.serialize_element(&name)?;
+                tuple.serialize_element(&serde_json::Value::Null)?;
+                tuple.end()
+            }
         }
     }
 }
@@ -94,6 +131,15 @@ pub enum Sb3Value {
     Text(String),
     Number(f64),
     Variable(DataId, String)
+}
+
+impl Sb3Value {
+    pub fn is_shadow(&self) -> bool {
+        match self {
+            Self::Ptr(..) | Self::Variable(..) => true,
+            _ => false
+        }
+    }
 }
 
 impl Serialize for Sb3Value {
@@ -136,6 +182,19 @@ pub struct BlocksBuilder {
     start_x: i32,
     start_y: i32,
     data: Rc<RefCell<InnerBuilderData>>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArgumentTy {
+    TextOrNumber,
+    Boolean
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct Sb3FunctionDefinition {
+    warp: bool,
+    arguments: Vec<String>,
+    proccode: String
 }
 
 impl BlocksBuilder {
@@ -223,6 +282,99 @@ impl BlocksBuilder {
             self.clone()
         )
     }
+
+    pub fn call_function(
+        &mut self,
+        definition: &Sb3FunctionDefinition,
+        arguments: &[Sb3Value]
+    ) {
+        let mut call = self.block("procedures_call");
+        for (arg_id, arg) in definition.arguments.iter().zip(arguments.iter()) {
+            call.input(&arg_id, &[arg.clone()]);
+        }
+
+        {
+            let call = call.block.as_mut().unwrap();
+            call.mutation = Some(Mutation::default());
+            let mutation = call.mutation.as_mut().unwrap();
+            mutation.warp = definition.warp;
+            mutation.proccode = definition.proccode.clone();
+            mutation.argumentids = definition.arguments.clone();
+        }
+    }
+
+    pub fn define_function(
+        &mut self,
+        name: impl AsRef<str>,
+        arguments: &[(String, ArgumentTy)],
+        warp: bool
+    ) -> (Self, Sb3FunctionDefinition) {
+        let mut subbuilder = Self::new();
+        subbuilder.code = self.code.clone();
+        let mut definition = Sb3FunctionDefinition::default();
+        definition.warp = warp;
+
+        let mut proc_definition = subbuilder.block("procedures_definition");
+        let mut proc_proto = subbuilder.block("procedures_prototype");
+        proc_proto.shadow();
+
+        {
+            let proto = proc_proto.block.as_mut().unwrap();
+            proto.mutation = Some(Mutation::default());
+            let mutation = proto.mutation.as_mut().unwrap();
+            mutation.warp = warp;
+            mutation.proccode = format!(
+                "{}({})", 
+                name.as_ref(),
+                arguments.iter().map(|arg|
+                    if arg.1 == ArgumentTy::TextOrNumber { "%s" }
+                    else { "%b" }
+                ).collect::<Vec<_>>().join(", ")
+            );
+            definition.proccode = mutation.proccode.clone();
+        }
+
+        let mut arg_ids = Vec::new();
+        for arg in arguments.iter() {
+            let id = DataId::new();
+            arg_ids.push(id.clone());
+
+            let mut argdef = subbuilder.block(
+                if arg.1 == ArgumentTy::TextOrNumber {
+                    "argument_reporter_string_number"
+                } else { "argument_reporter_boolean" }
+            );
+            argdef
+                .parent(proc_proto.id().clone())
+                .shadow()
+                .field("VALUE", Sb3Field::Argument(arg.0.clone()));
+            let argdef = argdef.finish();
+
+            proc_proto.input(&id.0, &[
+                Sb3Value::Ptr(argdef)
+            ]);
+
+            let mutation = proc_proto.block.as_mut().unwrap()
+                .mutation.as_mut().unwrap();
+            mutation.argumentids.push(id.0.clone());
+            mutation.argumentnames.push(arg.0.clone());
+            mutation.argumentdefaults.push(
+                if arg.1 == ArgumentTy::TextOrNumber { "" }
+                else { "false" }.to_string()
+            );
+
+            definition.arguments.push(id.0.clone());
+        }
+
+        proc_definition.input("custom_block", &[
+            Sb3Value::Ptr(proc_proto.finish())
+        ]);
+        let id = proc_definition.finish();
+
+        subbuilder.data.borrow_mut().previous = Some(id);
+
+        (subbuilder, definition)
+    }
 }
 
 pub struct BlockBuilder {
@@ -250,16 +402,21 @@ impl BlockBuilder {
         self
     }
 
+    pub fn parent(&mut self, id: DataId) -> &mut Self {
+        self.block.as_mut().unwrap().parent = Some(id.clone());
+        self.builder.data.borrow_mut().previous = Some(id);
+        self
+    }
+
     pub fn input(
         &mut self,
         name: impl AsRef<str>,
-        is_shadow: bool,
         values: &[Sb3Value]
     ) -> &mut Self {
         self.block.as_mut().unwrap().inputs.insert(
             name.as_ref().to_string(),
             Sb3Input {
-                kind: if is_shadow { 1 } else { 2 },
+                kind: if values[0].is_shadow() { 1 } else { 2 },
                 values: values.to_vec()
             }
         );

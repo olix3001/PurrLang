@@ -146,7 +146,6 @@ fn write_variable(
             );
             b.input(
                 "VALUE",
-                value.should_shadow(),
                 &[value.into_sb3(builder, b.id())?]
             );
         },
@@ -256,7 +255,6 @@ pub fn compile_expr(
                         let arg = compile_expr(arg, builder, notes)?;
                         b.input(
                             &block.inputs[i],
-                            arg.should_shadow(),
                             &[arg.into_sb3(builder, b.id())?]
                         );
                     }

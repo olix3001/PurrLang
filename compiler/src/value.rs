@@ -62,10 +62,4 @@ impl Value {
             _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch field.")
         }
     }
-
-    pub fn should_shadow(
-        &self,
-    ) -> bool {
-        true
-    }
 }
