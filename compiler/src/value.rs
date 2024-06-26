@@ -1,6 +1,7 @@
 use ahash::HashMap;
 use codegen::{blocks::{BlocksBuilder, Sb3Field, Sb3Value}, DataId};
 use error::CompilerError;
+use parser::ast::NodeId;
 use resolution::resolve::ResolvedBlock;
 
 use crate::CompileNotes;
@@ -11,12 +12,29 @@ pub enum Value {
     Text(String),
     Number(f64),
     BlockRef(ResolvedBlock),
+    FunctionRef(NodeId),
     BlockCall(DataId),
     Variable(DataId),
     Struct(HashMap<String, Value>)
 }
 
 impl Value {
+    pub fn flatten(self) -> Vec<Value> {
+        let mut value = Vec::new();
+        match self {
+            Value::Struct(fields) => {
+                let mut keys: Vec<&String> = fields.keys().collect();
+                keys.sort();
+                for key in keys.iter() {
+                    let field = fields.get(*key).unwrap();
+                    value.push(field.clone());
+                }
+            }
+            v @ _ => value.push(v)
+        }
+        value
+    }
+
     pub fn into_sb3(
         self,
         builder: &mut BlocksBuilder,

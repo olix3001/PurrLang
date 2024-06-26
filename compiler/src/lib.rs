@@ -1,5 +1,5 @@
 use ahash::{HashMap, HashMapExt};
-use codegen::{DataId, blocks::{Sb3Code, BlocksBuilder}};
+use codegen::{blocks::{ArgumentTy, BlocksBuilder, Sb3Code, Sb3FunctionDefinition}, DataId};
 use common::{FileRange, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
 use parser::ast::{self, NodeId};
@@ -12,7 +12,10 @@ pub mod value;
 pub struct CompileNotes<'a> {
     current_file: PurrSource,
     resolved_data: &'a ResolvedData,
-    variables: HashMap<NodeId, Value>
+    variables: HashMap<NodeId, Value>,
+    proc_definitions: HashMap<NodeId, Sb3FunctionDefinition>,
+    proc_returns: HashMap<NodeId, Value>,
+    current_proc_return: Option<Value>
 }
 
 pub fn compile_purr(
@@ -23,7 +26,10 @@ pub fn compile_purr(
     let mut notes = CompileNotes {
         current_file: source,
         resolved_data,
-        variables: HashMap::new()
+        variables: HashMap::new(),
+        proc_definitions: HashMap::new(),
+        proc_returns: HashMap::new(),
+        current_proc_return: None,
     };
     let mut builder = BlocksBuilder::new();
 
@@ -56,6 +62,46 @@ pub fn compile_items(
                     builder,
                     notes
                 )?;
+            }
+            ast::ItemKind::FunctionDefinition(definition) => {
+                let mut function_args = Vec::new();
+                for arg in definition.signature.arguments.iter() {
+                    let ty = notes.resolved_data.types.get(&arg.id).unwrap();
+                    let size = ty.size(&notes.resolved_data);
+                    let flat_ty = ty.flatten(&notes.resolved_data);
+
+                    for i in 0..size {
+                        function_args.push((
+                            format!("{}:{i}@{:04x}", arg.name, item.id.num()),
+                            if flat_ty[i] == ResolvedTy::Bool { ArgumentTy::Boolean }
+                            else { ArgumentTy::TextOrNumber }
+                        ));
+                    }
+                }
+                let (mut subbuilder, def) = builder.define_function(
+                    &definition.name,
+                    function_args.as_slice(),
+                    item.attributes.tags.iter().any(|tag|
+                        tag == &ast::AttributeTag::Marker("warp".to_string())
+                    )
+                );
+
+                notes.proc_definitions.insert(item.id, def);
+
+                let ResolvedTy::Function(_, return_ty) = 
+                    notes.resolved_data.types.get(&item.id).unwrap()
+                    else { unreachable!() };
+                let return_value = define_variables_for_type(
+                    &format!("ret:{}", definition.name),
+                    item.id,
+                    &return_ty,
+                    builder,
+                    notes
+                )?;
+
+                notes.current_proc_return = Some(return_value);
+                compile_statements(&definition.body, &mut subbuilder, notes)?;
+                notes.proc_returns.insert(item.id, notes.current_proc_return.take().unwrap());
             }
             _ => {}
         }
@@ -200,7 +246,7 @@ fn define_variables_for_type(
             Ok(Value::Struct(values))
         }
 
-        _ => {Ok(Value::Empty)}
+        _ => Ok(Value::Empty)
     }
 }
 
@@ -223,7 +269,9 @@ pub fn compile_expr(
                 if let Some(block) = notes.resolved_data.blocks.get(id) {
                     return Ok(Value::BlockRef(block.clone()));
                 }
-                // TODO: FunctionRef.
+                if notes.proc_definitions.contains_key(id) {
+                    return Ok(Value::FunctionRef(*id))
+                }
             }
  
             if let Some(def_id) = notes.resolved_data.variables.get(&expr.id) {

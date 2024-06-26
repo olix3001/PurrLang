@@ -152,4 +152,22 @@ impl ResolvedTy {
             Self::Ptr => panic!("Ptr cannot be used as value")
         }
     }
+
+    pub fn flatten(&self, resolved: &ResolvedData) -> Vec<ResolvedTy> {
+        let mut ty = Vec::new();
+        match self.resolve_to_top(resolved) {
+            s @ Self::Text | s @ Self::Bool | s @ Self::Number =>
+                ty.push(s),
+            Self::Struct(fields) => {
+                let mut keys: Vec<&String> = fields.keys().collect();
+                keys.sort();
+                for key in keys.iter() {
+                    let field = fields.get(*key).unwrap();
+                    ty.push(field.clone());
+                }
+            },
+            _ => {}
+        }
+        ty
+    }
 }

@@ -1,6 +1,6 @@
 use std::{cell::{RefCell, RefMut}, collections::HashMap, rc::Rc};
 
-use serde::{Serialize, ser::{SerializeSeq, SerializeTuple}};
+use serde::{Serialize, ser::{SerializeSeq, SerializeTuple, SerializeStruct}};
 
 use crate::DataId;
 
@@ -53,25 +53,37 @@ pub struct Sb3Block {
     pub mutation: Option<Mutation>
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct Mutation {
-    tag_name: &'static str,
-    children: [u8; 0],
     proccode: String,
     argumentids: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     argumentnames: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     argumentdefaults: Vec<String>,
     warp: bool
+}
+
+impl Serialize for Mutation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: serde::Serializer {
+        let mut ser = serializer.serialize_struct("mutation", 7)?;
+        ser.serialize_field("tagName", "mutation")?;
+        ser.serialize_field::<[u8]>("children", &[])?;
+
+        ser.serialize_field("proccode", &self.proccode)?;
+        ser.serialize_field("argumentids", 
+            &serde_json::ser::to_string(&self.argumentids).unwrap())?;
+        ser.serialize_field("argumentnames", 
+            &serde_json::ser::to_string(&self.argumentnames).unwrap())?;
+        ser.serialize_field("argumentdefaults", 
+            &serde_json::ser::to_string(&self.argumentdefaults).unwrap())?;
+        ser.serialize_field("warp", if self.warp { "true" } else { "false" })?;
+        ser.end()
+    }
 }
 
 impl Default for Mutation {
     fn default() -> Self {
         Self {
-            tag_name: "mutation",
-            children: [],
             proccode: String::new(),
             argumentids: Vec::new(),
             argumentnames: Vec::new(),
@@ -136,8 +148,8 @@ pub enum Sb3Value {
 impl Sb3Value {
     pub fn is_shadow(&self) -> bool {
         match self {
-            Self::Ptr(..) | Self::Variable(..) => true,
-            _ => false
+            Self::Ptr(..) | Self::Variable(..) => false,
+            _ => true
         }
     }
 }
@@ -315,8 +327,9 @@ impl BlocksBuilder {
         definition.warp = warp;
 
         let mut proc_definition = subbuilder.block("procedures_definition");
+        proc_definition.top_level();
         let mut proc_proto = subbuilder.block("procedures_prototype");
-        proc_proto.shadow();
+        proc_proto.shadow().parent(proc_definition.id.clone());
 
         {
             let proto = proc_proto.block.as_mut().unwrap();
@@ -324,12 +337,12 @@ impl BlocksBuilder {
             let mutation = proto.mutation.as_mut().unwrap();
             mutation.warp = warp;
             mutation.proccode = format!(
-                "{}({})", 
+                "{}( {} )", 
                 name.as_ref(),
                 arguments.iter().map(|arg|
                     if arg.1 == ArgumentTy::TextOrNumber { "%s" }
                     else { "%b" }
-                ).collect::<Vec<_>>().join(", ")
+                ).collect::<Vec<_>>().join(" , ")
             );
             definition.proccode = mutation.proccode.clone();
         }
@@ -403,7 +416,10 @@ impl BlockBuilder {
     }
 
     pub fn parent(&mut self, id: DataId) -> &mut Self {
-        self.block.as_mut().unwrap().parent = Some(id.clone());
+        let block = self.block.as_mut().unwrap();
+        block.parent = Some(id.clone());
+        block.x = None;
+        block.y = None;
         self.builder.data.borrow_mut().previous = Some(id);
         self
     }
