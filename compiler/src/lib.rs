@@ -254,6 +254,30 @@ pub fn compile_statements(
             ast::StatementKind::Expr(expr) => {
                 compile_expr(expr, builder, notes)?;
             }
+            ast::StatementKind::ExprNoSemi(expr) => {
+                let Some(current_proc) = notes.current_proc
+                else { panic!("Temporary error: Returning expression (no-semicolon) may only be used in procedures")};
+                // TODO: Allow if expr type is void.
+                
+                write_variable(
+                    &notes.proc_returns.get(&current_proc).unwrap().clone(),
+                    compile_expr(&expr, builder, notes)?,
+                    builder,
+                    notes
+                )?;
+            }
+            ast::StatementKind::Return(value) => {
+                if let Some(value) = value {
+                    let Some(current_proc) = notes.current_proc 
+                    else { panic!("Temporary error: return with value may only be used in procedures.") }; 
+                    write_variable(
+                        &notes.proc_returns.get(&current_proc).unwrap().clone(),
+                        compile_expr(&value, builder, notes)?,
+                        builder,
+                        notes
+                    )?;
+                }
+            }
             ast::StatementKind::LetDefinition(definition) => {
                 let ty = notes.resolved_data.types.get(&stmt.id).unwrap();
                 let variable = define_variables_for_type(

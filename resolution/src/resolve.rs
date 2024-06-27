@@ -417,6 +417,7 @@ pub fn resolve_statements(
                         });
                     }
                 }
+                block_return_type = expr_ty.clone();
                 resolved.types.insert(
                     stmt.id, expr_ty
                 );
