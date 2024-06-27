@@ -4,7 +4,7 @@ pub mod blocks;
 
 static DATA_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
-pub struct DataId(String);
+pub struct DataId(pub String);
 
 impl DataId {
     pub fn new() -> Self {

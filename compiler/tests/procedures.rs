@@ -44,7 +44,9 @@ fn compile_struct_argument_procedure() {
             say(user.name);
         }
 
-        @green_flag {}
+        @green_flag {
+            greet(.{ name: \"Hello\", nick: \"World\" });
+        }
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
@@ -57,6 +59,6 @@ fn compile_struct_argument_procedure() {
         &resolved
     ).unwrap();
 
-    assert_eq!(code.blocks.len(), 7);
+    assert_eq!(code.blocks.len(), 8);
     // TODO: Check correctness of ID's
 }

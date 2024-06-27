@@ -55,11 +55,11 @@ pub struct Sb3Block {
 
 #[derive(Debug, Clone)]
 pub struct Mutation {
-    proccode: String,
-    argumentids: Vec<String>,
-    argumentnames: Vec<String>,
-    argumentdefaults: Vec<String>,
-    warp: bool
+    pub proccode: String,
+    pub argumentids: Vec<String>,
+    pub argumentnames: Vec<String>,
+    pub argumentdefaults: Vec<String>,
+    pub warp: bool
 }
 
 impl Serialize for Mutation {
@@ -299,27 +299,6 @@ impl BlocksBuilder {
         )
     }
 
-    pub fn call_function(
-        &mut self,
-        definition: &Sb3FunctionDefinition,
-        arguments: &[Sb3Value]
-    ) {
-        let mut call = self.block("procedures_call");
-        for (arg_id, arg) in definition.arguments.iter().zip(arguments.iter()) {
-            call.input(&arg_id.0, &[arg.clone()]);
-        }
-
-        {
-            let call = call.block.as_mut().unwrap();
-            call.mutation = Some(Mutation::default());
-            let mutation = call.mutation.as_mut().unwrap();
-            mutation.warp = definition.warp;
-            mutation.proccode = definition.proccode.clone();
-            mutation.argumentids = definition.arguments.iter()
-                .map(|arg| arg.0.clone()).collect();
-        }
-    }
-
     pub fn define_function(
         &mut self,
         name: impl AsRef<str>,
@@ -408,8 +387,8 @@ impl BlocksBuilder {
 
 pub struct BlockBuilder {
     id: DataId,
-    block: Option<Sb3Block>,
-    builder: BlocksBuilder,
+    pub block: Option<Sb3Block>,
+    pub builder: BlocksBuilder,
     skip_set_previous: bool,
 }
 

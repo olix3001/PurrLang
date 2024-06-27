@@ -1,5 +1,5 @@
 use ahash::{HashMap, HashMapExt};
-use codegen::{blocks::{ArgumentTy, BlocksBuilder, Sb3Code, Sb3FunctionDefinition}, DataId};
+use codegen::{blocks::{ArgumentTy, BlocksBuilder, Mutation, Sb3Code, Sb3FunctionDefinition}, DataId};
 use common::{FileRange, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
 use parser::ast::{self, NodeId};
@@ -418,6 +418,20 @@ pub fn compile_expr(
 
                     Ok(Value::BlockCall(b.finish()))
                 },
+                Value::FunctionRef(id) => {
+                    let mut flat_args = Vec::new();
+                    for arg in arguments.iter() {
+                        let arg = compile_expr(arg, builder, notes)?;
+                        flat_args.extend(arg.flatten());
+                    }
+
+                    let Some(definition) = notes.proc_definitions.get(&id)
+                        else { unreachable!() };
+
+                    call_function(builder, definition, flat_args.as_slice())?;
+                    
+                    get_proc_return(id, builder, notes)
+                },
                 _ => return Err(CompilerError::Custom(
                     create_error(
                         error::info::ErrorInfo::from_area(CodeArea {
@@ -448,4 +462,27 @@ pub fn compile_expr(
 
         _ => todo!()
     }
+}
+
+fn call_function(
+    builder: &mut BlocksBuilder,
+    definition: &Sb3FunctionDefinition,
+    arguments: &[Value]
+) -> Result<(), CompilerError> {
+    let mut call = builder.block("procedures_call");
+    for (arg_id, arg) in definition.arguments.iter().zip(arguments.iter()) {
+        call.input(&arg_id.0, &[arg.clone().into_sb3(builder, call.id())?]);
+    }
+
+    {
+        let call = call.block.as_mut().unwrap();
+        call.mutation = Some(Mutation::default());
+        let mutation = call.mutation.as_mut().unwrap();
+        mutation.warp = definition.warp;
+        mutation.proccode = definition.proccode.clone();
+        mutation.argumentids = definition.arguments.iter()
+            .map(|arg| arg.0.clone()).collect();
+    }
+
+    Ok(())
 }
