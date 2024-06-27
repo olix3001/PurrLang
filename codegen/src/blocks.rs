@@ -240,6 +240,10 @@ impl BlocksBuilder {
         self.data.borrow_mut().previous = Some(previous);
     }
 
+    pub fn previous(&self) -> DataId {
+        self.data.borrow().previous.as_ref().unwrap().clone()
+    }
+
     pub fn get_block_mut(
         &mut self,
         id: &DataId
@@ -389,6 +393,16 @@ impl BlocksBuilder {
         subbuilder.data.borrow_mut().previous = Some(id);
 
         (subbuilder, definition)
+    }
+
+    pub fn subbuilder_for(
+        &mut self,
+        block: &DataId
+    ) -> Self {
+        let mut subbuilder = Self::new();
+        subbuilder.code = self.code.clone();
+        subbuilder.data.borrow_mut().previous = Some(block.clone());
+        subbuilder
     }
 }
 

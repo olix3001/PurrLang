@@ -14,9 +14,10 @@ pub struct CompileNotes<'a> {
     resolved_data: &'a ResolvedData,
     variables: HashMap<NodeId, Value>,
     proc_definitions: HashMap<NodeId, Sb3FunctionDefinition>,
+    proc_arguments: HashMap<NodeId, Value>,
+    proc_definition_ids: HashMap<NodeId, DataId>,
     proc_returns: HashMap<NodeId, Value>,
-    current_proc_return: Option<Value>,
-    current_args: Option<HashMap<NodeId, Value>>
+    current_proc: Option<NodeId>
 }
 
 pub fn compile_purr(
@@ -29,12 +30,18 @@ pub fn compile_purr(
         resolved_data,
         variables: HashMap::new(),
         proc_definitions: HashMap::new(),
+        proc_arguments: HashMap::new(),
+        proc_definition_ids: HashMap::new(),
         proc_returns: HashMap::new(),
-        current_proc_return: None,
-        current_args: None
+        current_proc: None
     };
     let mut builder = BlocksBuilder::new();
 
+    compile_items_prepass(
+        items,
+        &mut builder,
+        &mut notes
+    )?;
     compile_items(
         items,
         &mut builder,
@@ -44,7 +51,7 @@ pub fn compile_purr(
     Ok(builder.finish().unwrap())
 }
 
-pub fn compile_items(
+pub fn compile_items_prepass(
     items: &Vec<ast::Item>,
     builder: &mut BlocksBuilder,
     notes: &mut CompileNotes
@@ -57,14 +64,7 @@ pub fn compile_items(
                 compile_items(&module.body, builder, notes)?;
                 notes.current_file = temp_file;
             }
-            ast::ItemKind::Trigger(trigger) => {
-                compile_trigger(
-                    trigger,
-                    item.pos.clone(),
-                    builder,
-                    notes
-                )?;
-            }
+
             ast::ItemKind::FunctionDefinition(definition) => {
                 let mut function_args = Vec::new();
                 for arg in definition.signature.arguments.iter() {
@@ -80,12 +80,11 @@ pub fn compile_items(
                         ));
                     }
                 }
-                let ids = get_or_prepare_function_arguments(
+                let ids = get_function_arguments(
                     item.id,
-                    notes.resolved_data.types.get(&item.id).unwrap(),
                     notes
                 );
-                let (mut subbuilder, def) = builder.define_function(
+                let (sb, def) = builder.define_function(
                     &definition.name,
                     function_args.as_slice(),
                     ids.as_slice(),
@@ -110,17 +109,52 @@ pub fn compile_items(
                         )
                     );
                 }
+                notes.proc_arguments.extend(current_args.clone().into_iter());
 
                 notes.proc_definitions.insert(item.id, def);
-
+                notes.proc_definition_ids.insert(item.id, sb.previous());
                 let return_value = get_proc_return(item.id, builder, notes)?;
+                notes.proc_returns.insert(item.id, return_value);
+            }
 
-                notes.current_proc_return = Some(return_value);
-                notes.current_args = Some(current_args);
-                compile_statements(&definition.body, &mut subbuilder, notes)?;
-                notes.proc_returns.insert(item.id, notes.current_proc_return.take().unwrap());
-                notes.current_proc_return = None;
-                notes.current_args = None;
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+pub fn compile_items(
+    items: &Vec<ast::Item>,
+    builder: &mut BlocksBuilder,
+    notes: &mut CompileNotes
+) -> Result<(), CompilerError> {
+    for item in items.iter() {
+        match &item.kind {
+            ast::ItemKind::Module(module) => {
+                let temp_file = notes.current_file.clone();
+                notes.current_file = module.source.clone();
+                compile_items(&module.body, builder, notes)?;
+                notes.current_file = temp_file;
+            }
+            ast::ItemKind::Trigger(trigger) => {
+                compile_trigger(
+                    trigger,
+                    item.pos.clone(),
+                    builder,
+                    notes
+                )?;
+            }
+            ast::ItemKind::FunctionDefinition(definition) => {
+                let definition_id = notes.proc_definition_ids.get(&item.id)
+                    .unwrap().clone();
+                let mut subbuilder = builder.subbuilder_for(&definition_id);
+                notes.current_proc = Some(item.id);
+                compile_statements(
+                    &definition.body,
+                    &mut subbuilder,
+                    notes
+                )?;
+                notes.current_proc = None;
             }
             _ => {}
         }
@@ -151,15 +185,15 @@ fn get_proc_return(
     Ok(value)
 }
 
-fn get_or_prepare_function_arguments(
+fn get_function_arguments(
     node_id: NodeId,
-    ty: &ResolvedTy,
     notes: &mut CompileNotes
 ) -> Vec<DataId> {
     if let Some(def) = notes.proc_definitions.get(&node_id) {
         return def.arguments.clone();
     }
     let mut ids = Vec::new();
+    let ty = notes.resolved_data.types.get(&node_id).unwrap();
     let ResolvedTy::Function(args, _) = ty 
         else { unreachable!("There is error in the compiler?") };
     for arg in args.iter() {
@@ -348,8 +382,8 @@ pub fn compile_expr(
                     return Ok(variable.clone());
                 }
 
-                if let Some(args) = &notes.current_args {
-                    if let Some(argument) = args.get(def_id) {
+                if notes.current_proc.is_some() {
+                    if let Some(argument) = notes.proc_arguments.get(def_id) {
                         return Ok(argument.clone());
                     }
                 }
