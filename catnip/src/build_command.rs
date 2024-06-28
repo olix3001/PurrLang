@@ -4,9 +4,9 @@ use codegen::blocks::Sb3Code;
 use colored::Colorize;
 use common::PurrSource;
 use compiler::compile_purr;
-use error::{create_error_report, ErrorReport};
+use error::{create_error_report, ErrorReport, SyntaxError};
 use once_cell::sync::Lazy;
-use parser::parser::parse_purr;
+use parser::{ast::NodeId, parser::parse_purr};
 use resolution::project_tree::ProjectTree;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
@@ -210,8 +210,8 @@ fn build_file(
     }
 
     let src = fs::read_to_string(&src_path).unwrap();
-    
-    let ast = match parse_purr(src, PurrSource::File(src_path.to_path_buf())) {
+
+    let mut ast = match parse_purr(src, PurrSource::File(src_path.to_path_buf())) {
         Ok(ast) => ast,
         Err(err) => {
             let cache = PurrCache::default();
@@ -219,6 +219,15 @@ fn build_file(
             return None;
         }
     };
+
+    match inline_file_modules(&src_path, &mut ast.0) {
+        Ok(_) => {},
+        Err(err) => {
+            let cache = PurrCache::default();
+            create_error_report(ErrorReport::from(err)).eprint(cache).unwrap();
+            return None;
+        }
+    }
 
     let project_tree = ProjectTree::build_from_ast(Default::default(), &ast.0);
     let resolved = match resolution::resolve::resolve(&ast, &project_tree) {
@@ -244,4 +253,56 @@ fn build_file(
     };
 
     Some(result)
+}
+
+fn inline_file_modules(
+    entry: &Path,
+    ast: &mut Vec<parser::ast::Item>
+) -> Result<(), SyntaxError> {
+    use parser::ast;
+    let mut dir = fs::read_dir(entry.parent().unwrap()).unwrap();
+    while let Some(Ok(file)) = dir.next() {
+        let path = file.path();
+        if path == entry { continue; }
+        if path.is_file() {
+            let mod_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+            if mod_name == "mod" { continue; }
+            let src = fs::read_to_string(&path).unwrap();
+            let source = PurrSource::File(path.clone());
+            let mod_ast = parse_purr(src, source.clone())?;
+            ast.push(ast::Item {
+                kind: ast::ItemKind::Module(ast::ModuleDefinition {
+                    name: mod_name,
+                    body: mod_ast.0,
+                    source
+                }) ,
+                id: NodeId::next(),
+                pos: 0..0,
+                attributes: mod_ast.1.attributes
+            });
+        } else {
+            if path.join("mod.purr").exists() {
+                let mod_path = path.join("mod.purr");
+                let mod_name = path.file_name().unwrap().to_str().unwrap().to_string();
+                let src = fs::read_to_string(&mod_path).unwrap();
+                let source = PurrSource::File(mod_path.clone());
+                let mod_ast = parse_purr(src, source.clone())?;
+                let mut definition = ast::ModuleDefinition {
+                    name: mod_name,
+                    body: mod_ast.0,
+                    source
+                };
+
+                inline_file_modules(&mod_path, &mut definition.body)?;
+
+                ast.push(ast::Item {
+                    kind: ast::ItemKind::Module(definition) ,
+                    id: NodeId::next(),
+                    pos: 0..0,
+                    attributes: mod_ast.1.attributes
+                });
+            }
+        }
+    }
+    Ok(())
 }
