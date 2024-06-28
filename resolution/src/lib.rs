@@ -119,6 +119,8 @@ impl ResolvedTy {
                 }
                 true
             },
+            (ResolvedTy::Number, ResolvedTy::Text) => true,
+            (ResolvedTy::Bool, ResolvedTy::Text) => true,
             (a, b) => a == b
         }
     }

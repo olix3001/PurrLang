@@ -515,7 +515,122 @@ pub fn compile_expr(
             }
         }
 
+        ast::ExpressionKind::Binary(a, op, b) => {
+            let ac = compile_expr(&a, builder, notes)?;
+            let bc = compile_expr(&b, builder, notes)?;
+
+            match op {
+                ast::BinaryOp::Lt | ast::BinaryOp::Le | 
+                ast::BinaryOp::Gt | ast::BinaryOp::Ge |
+                ast::BinaryOp::And | ast::BinaryOp::Or => {
+                    let mut b = builder.block(match op {
+                        ast::BinaryOp::Lt => "operator_lt",
+                        ast::BinaryOp::Le => "operator_le",
+                        ast::BinaryOp::Gt => "operator_gt",
+                        ast::BinaryOp::Ge => "operator_ge",
+                        ast::BinaryOp::And => "operator_and",
+                        ast::BinaryOp::Or => "operator_or",
+                        _ => unreachable!()
+                    });
+
+                    b.input("OPERAND1", &[
+                        ac.into_sb3(builder, b.id())?
+                    ]);
+                    b.input("OPERAND2", &[
+                        bc.into_sb3(builder, b.id())?
+                    ]);
+
+                    Ok(Value::BlockCall(b.finish()))
+                }
+
+                ast::BinaryOp::Sub | ast::BinaryOp::Mul |
+                ast::BinaryOp::Div | ast::BinaryOp::Mod => {
+                    let mut b = builder.block(match op {
+                        ast::BinaryOp::Sub => "operator_subtract",
+                        ast::BinaryOp::Mul => "operator_multiply",
+                        ast::BinaryOp::Div => "operator_divide",
+                        ast::BinaryOp::Mod => "operator_mod",
+                        _ => unreachable!()
+                    });
+
+                    b.input("NUM1", &[
+                        ac.into_sb3(builder, b.id())?
+                    ]);
+                    b.input("NUM2", &[
+                        bc.into_sb3(builder, b.id())?
+                    ]);
+
+                    Ok(Value::BlockCall(b.finish()))
+                }
+
+                ast::BinaryOp::Add => {
+                    let ty = notes.resolved_data.types.get(&expr.id).unwrap();
+
+                    if *ty == ResolvedTy::Text {
+                        let mut b = builder.block("operator_join");
+                        b.input("STRING1", &[ac.into_sb3(builder, b.id())?]);
+                        b.input("STRING2", &[bc.into_sb3(builder, b.id())?]);
+                        Ok(Value::BlockCall(b.finish()))
+                    } else {
+                        let mut b = builder.block("operator_add");
+                        b.input("NUM1", &[ac.into_sb3(builder, b.id())?]);
+                        b.input("NUM2", &[bc.into_sb3(builder, b.id())?]);
+                        Ok(Value::BlockCall(b.finish()))
+                    }
+                }
+
+                ast::BinaryOp::Eq => {
+                    deep_equals(ac, bc, builder, notes)
+                }
+
+                ast::BinaryOp::Ne => {
+                    let eq = deep_equals(ac, bc, builder, notes)?;
+                    let mut not = builder.block("operator_not");
+                    not.input("OPERAND", &[eq.into_sb3(builder, not.id())?]);
+                    Ok(Value::BlockCall(not.finish()))
+                }
+
+                ast::BinaryOp::Pow => { unimplemented!("Power operator is not implemented yet.") }
+            }
+        }
+
         _ => todo!()
+    }
+}
+
+/// Compares complex values including structs.
+fn deep_equals(
+    a: Value,
+    b: Value,
+    builder: &mut BlocksBuilder,
+    _notes: &mut CompileNotes
+) -> Result<Value, CompilerError> {
+    match a {
+        Value::Struct(_) => {
+            let a = a.flatten();
+            let b = b.flatten();
+
+            a.into_iter().zip(b.into_iter()).try_fold(Value::Empty, |acc, (a, b)| {
+                let mut cmp = builder.block("operator_equals");
+                cmp.input("OPERAND1", &[a.into_sb3(builder, cmp.id())?]);
+                cmp.input("OPERAND2", &[b.into_sb3(builder, cmp.id())?]);
+                let cmp = Value::BlockCall(cmp.finish());
+                if acc == Value::Empty {
+                    Ok(cmp)
+                } else {
+                    let mut and = builder.block("operator_and");
+                    and.input("OPERAND1", &[acc.into_sb3(builder, and.id())?]);
+                    and.input("OPERAND2", &[cmp.into_sb3(builder, and.id())?]);
+                    Ok(Value::BlockCall(and.finish()))
+                }
+            })
+        },
+        _ => {
+            let mut eq = builder.block("operator_equals");
+            eq.input("OPERAND1", &[a.into_sb3(builder, eq.id())?]);
+            eq.input("OPERAND2", &[b.into_sb3(builder, eq.id())?]);
+            Ok(Value::BlockCall(eq.finish()))
+        }
     }
 }
 

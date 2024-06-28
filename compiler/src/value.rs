@@ -6,7 +6,7 @@ use resolution::{resolve::{ResolvedBlock, ResolvedData}, ResolvedTy};
 
 use crate::CompileNotes;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Empty,
     Text(String),

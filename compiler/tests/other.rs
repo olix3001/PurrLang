@@ -57,3 +57,34 @@ fn compile_unary_operators() {
     assert_eq!(code.blocks.len(), 4);
     assert_eq!(code.variables.len(), 2);
 }
+
+#[test]
+fn compile_binary_operators() {
+    const SOURCE: &str = "
+        block say(MESSAGE: text) looks_say {
+            inputs: .{ MESSAGE }
+        }
+
+        struct Vec2 { x: number, y: number }
+
+        @green_flag {
+            let a: Vec2 = .{ x: 1, y: 2 };
+            let b: Vec2 = .{ x: 1, y: 2 };
+
+            say(\"a == b: \" + (a == b));
+        }
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let resolved = resolve(&ast, &names).unwrap();
+
+    let code = compile_purr(
+        &ast.0,
+        PurrSource::Unknown,
+        &resolved
+    ).unwrap();
+
+    assert_eq!(code.blocks.len(), 10);
+    assert_eq!(code.variables.len(), 4);
+}

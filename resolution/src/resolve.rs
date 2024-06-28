@@ -27,7 +27,7 @@ pub struct ResolvedData {
     pub signatures: HashMap<NodeId, Vec<NodeId>>
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedBlock {
     pub opcode: String,
     pub inputs: Vec<String>,
@@ -655,7 +655,7 @@ pub fn resolve_expr(
 
         ast::ExpressionKind::Unary(op, subexpr) => {
             let expr_ty = resolve_expr(&subexpr, resolved, stack, notes)?;
-            match op {
+            let ty = match op {
                 ast::UnaryOp::Neg => {
                     if expr_ty != ResolvedTy::Number {
                         return Err(CompilerError::Custom(
@@ -672,7 +672,7 @@ pub fn resolve_expr(
                             )
                         ));
                     }
-                    return Ok(ResolvedTy::Number);
+                    ResolvedTy::Number
                 }
                 ast::UnaryOp::Not => {
                     if expr_ty != ResolvedTy::Bool {
@@ -690,9 +690,12 @@ pub fn resolve_expr(
                             )
                         ));
                     }
-                    return Ok(ResolvedTy::Bool);
+                    ResolvedTy::Bool
                 }
-            }
+            };
+
+            resolved.types.insert(expr.id, ty.clone());
+            ty
         }
 
         ast::ExpressionKind::Binary(a, op, b) => {
@@ -731,7 +734,7 @@ pub fn resolve_expr(
                 Ok(())
             }
             
-            match op {
+            let ty = match op {
                 ast::BinaryOp::Eq | ast::BinaryOp::Ne => {
                     if !a_ty.matches(&b_ty, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
@@ -743,27 +746,27 @@ pub fn resolve_expr(
                             file: notes.current_file.clone()
                         });
                     }
-                    Ok(ResolvedTy::Bool)
+                    ResolvedTy::Bool
                 },
 
                 ast::BinaryOp::Gt | ast::BinaryOp::Ge |
                 ast::BinaryOp::Lt | ast::BinaryOp::Le => {
                     expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
-                    Ok(ResolvedTy::Bool)
+                    ResolvedTy::Bool
                 }
 
                 ast::BinaryOp::Sub | ast::BinaryOp::Div |
                 ast::BinaryOp::Mul | ast::BinaryOp::Mod |
                 ast::BinaryOp::Pow => {
                     expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
-                    Ok(ResolvedTy::Number)
+                    ResolvedTy::Number
                 }
 
                 ast::BinaryOp::Add => {
                     if a_ty.resolve_to_top(resolved) == ResolvedTy::Text {
                         match b_ty.resolve_to_top(resolved){
                             ResolvedTy::Text | ResolvedTy::Number | ResolvedTy::Bool =>
-                                return Ok(ResolvedTy::Text),
+                                ResolvedTy::Text,
                             _ => {
                                 return Err(CompilerError::Custom(
                                     create_error(
@@ -783,10 +786,10 @@ pub fn resolve_expr(
                                 ));
                             }
                         }
+                    } else {
+                        expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
+                        ResolvedTy::Number
                     }
-
-                    expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
-                    Ok(ResolvedTy::Number)
                 }
 
                 ast::BinaryOp::And | ast::BinaryOp::Or => {
@@ -811,9 +814,12 @@ pub fn resolve_expr(
                         });
                     }
 
-                    Ok(ResolvedTy::Bool)
+                    ResolvedTy::Bool
                 }
-            }?
+            };
+
+            resolved.types.insert(expr.id, ty.clone());
+            ty
         }
 
         _ => { notes.default_ret_ty.clone() }
