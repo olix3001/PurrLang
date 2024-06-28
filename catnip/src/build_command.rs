@@ -1,10 +1,16 @@
 use std::{env::current_dir, fs, io::{BufWriter, Write}, path::{Path, PathBuf}};
 
+use codegen::blocks::Sb3Code;
 use colored::Colorize;
+use common::PurrSource;
+use compiler::compile_purr;
+use error::{create_error_report, ErrorReport};
 use once_cell::sync::Lazy;
+use parser::parser::parse_purr;
+use resolution::project_tree::ProjectTree;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
-use crate::{project::{Costume, Project}, sb3::{ScratchCostume, ScratchProject, Target}};
+use crate::{cache::PurrCache, project::{Costume, Project}, sb3::{ScratchCostume, ScratchProject, Target}};
 
 static ZIP_OPTIONS: Lazy<SimpleFileOptions> = Lazy::new(
    || SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored)
@@ -126,6 +132,16 @@ fn build_(
         };
         scratch_sprite.current_costume = current_costume_id as _;
 
+        if let Some(entry) = &sprite.entry {
+            if let Some(code) = build_file(
+                entry.as_path(),
+                project_dir
+            ) {
+                scratch_sprite.blocks = code.blocks;
+                scratch_sprite.variables = code.variables;
+            } else { return; }
+        }
+
         if is_stage {
             scratch.targets.insert(0, scratch_sprite);
         } else {
@@ -175,4 +191,57 @@ fn project_costume_to_scratch_costume(
     };
 
     Some(scratch_costume)
+}
+
+fn build_file(
+    entry: &Path,
+    project_dir: &Path
+) -> Option<Sb3Code> {
+    let src_path = project_dir.join("src").join(entry);
+    if !src_path.exists() {
+        eprintln!(
+            "{}: {} {} {}",
+            "Error".bold().bright_red(),
+            "Source file".bold(),
+            entry.to_str().unwrap().bold().bright_yellow(),
+            "does not exist in src/.".bold()
+        );
+        return None;
+    }
+
+    let src = fs::read_to_string(&src_path).unwrap();
+    
+    let ast = match parse_purr(src, PurrSource::File(src_path.to_path_buf())) {
+        Ok(ast) => ast,
+        Err(err) => {
+            let cache = PurrCache::default();
+            create_error_report(ErrorReport::from(err)).eprint(cache).unwrap();
+            return None;
+        }
+    };
+
+    let project_tree = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let resolved = match resolution::resolve::resolve(&ast, &project_tree) {
+        Ok(resolved) => resolved,
+        Err(err) => {
+            let cache = PurrCache::default();
+            create_error_report(ErrorReport::from(err)).eprint(cache).unwrap();
+            return None;
+        }
+    };
+
+    let result = match compile_purr(
+        &ast.0,
+        PurrSource::File(src_path.to_path_buf()),
+        &resolved
+    ) {
+        Ok(result) => result,
+        Err(err) => {
+            let cache = PurrCache::default();
+            create_error_report(ErrorReport::from(err)).eprint(cache).unwrap();
+            return None;
+        }
+    };
+
+    Some(result)
 }

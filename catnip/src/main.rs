@@ -4,6 +4,7 @@ use colored::Colorize;
 mod build_command;
 mod project;
 mod sb3;
+mod cache;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

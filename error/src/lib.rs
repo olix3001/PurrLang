@@ -1,6 +1,7 @@
 use common::{FileRange, PurrSource};
 use info::{CodeArea, ErrorInfo};
 
+pub extern crate ariadne;
 pub mod info;
 
 #[derive(Debug)]

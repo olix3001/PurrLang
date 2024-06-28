@@ -161,6 +161,7 @@ dependencies = [
  "clap",
  "codegen",
  "colored",
+ "common",
  "compiler",
  "error",
  "hex",
