@@ -392,6 +392,15 @@ pub fn compile_expr(
             Ok(Value::Text(text.clone())),
         ast::ExpressionKind::Number(number) =>
             Ok(Value::Number(*number)),
+        ast::ExpressionKind::Bool(value) => {
+            let mut b = builder.block("operator_equals");
+            // Workaround as scratch does not support true/false.
+            b.input("OPERAND1", &[
+                Sb3Value::Number(if *value { 1. } else { 0. })
+            ]);
+            b.input("OPERAND2", &[Sb3Value::Number(1.)]);
+            Ok(Value::BlockCall(b.finish()))
+        }
 
         ast::ExpressionKind::Path(_) => {
             // Could be path to block/function.

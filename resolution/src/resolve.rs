@@ -695,6 +695,127 @@ pub fn resolve_expr(
             }
         }
 
+        ast::ExpressionKind::Binary(a, op, b) => {
+            let a_ty = resolve_expr(&a, resolved, stack, notes)?;
+            let b_ty = resolve_expr(&b, resolved, stack, notes)?;
+
+            fn expect_two_numbers(
+                expr: &ast::Expression,
+                a: &ast::Expression,
+                a_ty: &ResolvedTy,
+                b: &ast::Expression,
+                b_ty: &ResolvedTy,
+                resolved: &ResolvedData,
+                notes: &ResolutionNotes
+            ) -> Result<(), CompilerError> {
+                if a_ty.resolve_to_top(resolved) != ResolvedTy::Number {
+                    return Err(CompilerError::MismatchedTypes {
+                        pos: expr.pos.clone(),
+                        lhs: a.pos.clone(),
+                        lhs_ty: a_ty.pretty_name(&notes.project_tree),
+                        rhs: expr.pos.clone(),
+                        rhs_ty: "This expression requires both values to be a number.".to_string(),
+                        file: notes.current_file.clone()
+                    });
+                }
+                if b_ty.resolve_to_top(resolved) != ResolvedTy::Number {
+                    return Err(CompilerError::MismatchedTypes {
+                        pos: expr.pos.clone(),
+                        lhs: expr.pos.clone(),
+                        lhs_ty: "This expression requires both values to be a number.".to_string(),
+                        rhs: b.pos.clone(),
+                        rhs_ty: b_ty.pretty_name(&notes.project_tree),
+                        file: notes.current_file.clone()
+                    });
+                }
+                Ok(())
+            }
+            
+            match op {
+                ast::BinaryOp::Eq | ast::BinaryOp::Ne => {
+                    if !a_ty.matches(&b_ty, resolved, notes) {
+                        return Err(CompilerError::MismatchedTypes {
+                            pos: expr.pos.clone(),
+                            lhs: a.pos.clone(),
+                            lhs_ty: a_ty.pretty_name(&notes.project_tree),
+                            rhs: b.pos.clone(),
+                            rhs_ty: b_ty.pretty_name(&notes.project_tree),
+                            file: notes.current_file.clone()
+                        });
+                    }
+                    Ok(ResolvedTy::Bool)
+                },
+
+                ast::BinaryOp::Gt | ast::BinaryOp::Ge |
+                ast::BinaryOp::Lt | ast::BinaryOp::Le => {
+                    expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
+                    Ok(ResolvedTy::Bool)
+                }
+
+                ast::BinaryOp::Sub | ast::BinaryOp::Div |
+                ast::BinaryOp::Mul | ast::BinaryOp::Mod |
+                ast::BinaryOp::Pow => {
+                    expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
+                    Ok(ResolvedTy::Number)
+                }
+
+                ast::BinaryOp::Add => {
+                    if a_ty.resolve_to_top(resolved) == ResolvedTy::Text {
+                        match b_ty.resolve_to_top(resolved){
+                            ResolvedTy::Text | ResolvedTy::Number | ResolvedTy::Bool =>
+                                return Ok(ResolvedTy::Text),
+                            _ => {
+                                return Err(CompilerError::Custom(
+                                    create_error(
+                                        error::info::ErrorInfo::from_area(CodeArea {
+                                            pos: expr.pos.clone(), file: notes.current_file.clone()
+                                        }),
+                                        "Compilation error",
+                                        &[(
+                                            CodeArea { pos: b.pos.clone(), file: notes.current_file.clone() },
+                                            &format!(
+                                                "'+' operator expects this to be text/number/boolean but got {}.",
+                                                b_ty.pretty_name(&notes.project_tree)
+                                            ),
+                                        )],
+                                        None
+                                    )
+                                ));
+                            }
+                        }
+                    }
+
+                    expect_two_numbers(expr, a, &a_ty, b, &b_ty, resolved, notes)?;
+                    Ok(ResolvedTy::Number)
+                }
+
+                ast::BinaryOp::And | ast::BinaryOp::Or => {
+                    if a_ty.resolve_to_top(resolved) != ResolvedTy::Bool {
+                        return Err(CompilerError::MismatchedTypes {
+                            pos: expr.pos.clone(),
+                            lhs: a.pos.clone(),
+                            lhs_ty: a_ty.pretty_name(&notes.project_tree),
+                            rhs: expr.pos.clone(),
+                            rhs_ty: "This expression requires both values to be a boolean.".to_string(),
+                            file: notes.current_file.clone()
+                        });
+                    }
+                    if b_ty.resolve_to_top(resolved) != ResolvedTy::Bool {
+                        return Err(CompilerError::MismatchedTypes {
+                            pos: expr.pos.clone(),
+                            lhs: expr.pos.clone(),
+                            lhs_ty: "This expression requires both values to be a boolean.".to_string(),
+                            rhs: b.pos.clone(),
+                            rhs_ty: b_ty.pretty_name(&notes.project_tree),
+                            file: notes.current_file.clone()
+                        });
+                    }
+
+                    Ok(ResolvedTy::Bool)
+                }
+            }?
+        }
+
         _ => { notes.default_ret_ty.clone() }
     };
     Ok(resolved)
