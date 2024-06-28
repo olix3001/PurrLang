@@ -3,7 +3,7 @@ repository = "https://github.com/olix3001/PurrLang"
 
 [workspace]
 resolver = "2"
-members = [".", "codegen", "common", "compiler", "error", "parser", "resolution"]
+members = [".", "catnip", "codegen", "common", "compiler", "error", "parser", "resolution"]
 
 [workspace.dependencies]
 internment = "0.8.3"

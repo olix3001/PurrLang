@@ -1,0 +1,24 @@
+[package]
+name = "catnip"
+version = "0.1.0"
+edition = "2021"
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5.7", features = ["derive"] }
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.118"
+toml = "0.8.14"
+colored = "2.1.0"
+
+parser.workspace = true
+error.workspace = true
+resolution.workspace = true
+compiler.workspace = true
+codegen.workspace = true
+zip = "2.1.3"
+md5 = "0.7.0"
+hex = "0.4.3"
+once_cell = "1.19.0"
