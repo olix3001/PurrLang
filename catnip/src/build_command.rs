@@ -27,7 +27,7 @@ pub fn build_project(args: BuildCommand) {
     let path = args.directory.clone().unwrap_or(current_dir().unwrap());
     let target = args.target.clone().unwrap_or(path.join("out.sb3"));
 
-    let target_writer = fs::File::create(target).unwrap();
+    let target_writer = fs::File::create(&target).unwrap();
     let mut zip = ZipWriter::new(BufWriter::new(target_writer));
 
     println!(
@@ -60,6 +60,12 @@ pub fn build_project(args: BuildCommand) {
 
     build_(&args, &path.as_path(), &project, &mut zip);
     zip.finish().unwrap();
+
+    println!(
+        "  {} {}",
+        "Compiled as".bold().bright_green(),
+        target.canonicalize().unwrap().to_str().unwrap()
+    );
 }
 
 fn build_(
@@ -228,6 +234,8 @@ fn build_file(
             return None;
         }
     }
+
+    // TODO: Clean modules that are not imported
 
     let project_tree = ProjectTree::build_from_ast(Default::default(), &ast.0);
     let resolved = match resolution::resolve::resolve(&ast, &project_tree) {
