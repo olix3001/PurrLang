@@ -1,5 +1,5 @@
 use ahash::{HashMap, HashMapExt};
-use codegen::{blocks::{ArgumentTy, BlocksBuilder, Mutation, Sb3Code, Sb3Field, Sb3FunctionDefinition}, DataId};
+use codegen::{blocks::{ArgumentTy, BlocksBuilder, Mutation, Sb3Code, Sb3Field, Sb3FunctionDefinition, Sb3Value}, DataId};
 use common::{FileRange, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
 use parser::ast::{self, NodeId};
@@ -487,6 +487,23 @@ pub fn compile_expr(
                 );
             }
             Ok(Value::Struct(value))
+        }
+
+        ast::ExpressionKind::Unary(op, expr) => {
+            let expr = compile_expr(expr, builder, notes)?;
+            match op {
+                ast::UnaryOp::Neg => {
+                    let mut b = builder.block("operator_subtract");
+                    b.input("NUM1", &[Sb3Value::Number(0.)]);
+                    b.input("NUM2", &[expr.into_sb3(builder, b.id())?]);
+                    Ok(Value::BlockCall(b.finish()))
+                },
+                ast::UnaryOp::Not => {
+                    let mut b = builder.block("operator_not");
+                    b.input("OPERAND", &[expr.into_sb3(builder, b.id())?]);
+                    Ok(Value::BlockCall(b.finish()))
+                }
+            }
         }
 
         _ => todo!()

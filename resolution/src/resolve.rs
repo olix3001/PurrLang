@@ -653,6 +653,48 @@ pub fn resolve_expr(
             ResolvedTy::Struct(fields_map)
         },
 
+        ast::ExpressionKind::Unary(op, subexpr) => {
+            let expr_ty = resolve_expr(&subexpr, resolved, stack, notes)?;
+            match op {
+                ast::UnaryOp::Neg => {
+                    if expr_ty != ResolvedTy::Number {
+                        return Err(CompilerError::Custom(
+                            create_error(
+                                error::info::ErrorInfo::from_area(CodeArea {
+                                    pos: expr.pos.clone(), file: notes.current_file.clone()
+                                }),
+                                "Compilation error",
+                                &[(
+                                    CodeArea { pos: subexpr.pos.clone(), file: notes.current_file.clone() },
+                                    "'-' unary operator works only on numbers.",
+                                )],
+                                None
+                            )
+                        ));
+                    }
+                    return Ok(ResolvedTy::Number);
+                }
+                ast::UnaryOp::Not => {
+                    if expr_ty != ResolvedTy::Bool {
+                        return Err(CompilerError::Custom(
+                            create_error(
+                                error::info::ErrorInfo::from_area(CodeArea {
+                                    pos: expr.pos.clone(), file: notes.current_file.clone()
+                                }),
+                                "Compilation error",
+                                &[(
+                                    CodeArea { pos: subexpr.pos.clone(), file: notes.current_file.clone() },
+                                    "'!' unary operator works only on boolean values.",
+                                )],
+                                None
+                            )
+                        ));
+                    }
+                    return Ok(ResolvedTy::Bool);
+                }
+            }
+        }
+
         _ => { notes.default_ret_ty.clone() }
     };
     Ok(resolved)

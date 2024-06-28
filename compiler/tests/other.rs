@@ -34,3 +34,26 @@ fn compile_returning_block() {
     assert_eq!(code.blocks.len(), 4);
     assert_eq!(code.variables.len(), 0);
 }
+
+#[test]
+fn compile_unary_operators() {
+    const SOURCE: &str = "
+        @green_flag {
+            let a = 1;
+            let b = -a;
+        }
+    ";
+
+    let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let resolved = resolve(&ast, &names).unwrap();
+
+    let code = compile_purr(
+        &ast.0,
+        PurrSource::Unknown,
+        &resolved
+    ).unwrap();
+
+    assert_eq!(code.blocks.len(), 4);
+    assert_eq!(code.variables.len(), 2);
+}

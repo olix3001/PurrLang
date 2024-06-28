@@ -104,7 +104,7 @@ pub enum Token {
     // ==< Values >==
     #[regex(r"([a-zA-Z_][a-zA-Z0-9_]*)")]
     Ident,
-    #[regex(r"[0-9][_0-9]*(\.[0-9][_0-9]*)?")]
+    #[regex(r"-?[0-9][_0-9]*(\.[0-9][_0-9]*)?")]
     NumberLit,
     #[regex(r"0x[a-fA-F0-9][_a-fA-F0-9]*")]
     HexNumberLit,
