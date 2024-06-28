@@ -162,6 +162,8 @@ pub enum ExpressionKind {
     Binary(Box<Expression>, BinaryOp, Box<Expression>),
     Paren(Box<Expression>),
 
+    Assignment(Box<Expression>, Box<Expression>),
+
     Field(Box<Expression>, String),
     Call {
         callee: Box<Expression>,

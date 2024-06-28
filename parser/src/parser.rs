@@ -557,7 +557,28 @@ pub fn parse_unary_expression(
             pos: start_pos..end_pos,
             id: NodeId::next()
         })
-    } else { parse_expression_call_or_field(tokens, notes) }
+    } else { parse_expression_assignment(tokens, notes) }
+}
+
+pub fn parse_expression_assignment(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Expression, SyntaxError> {
+    let subject = parse_expression_call_or_field(tokens, notes)?;
+
+    if tokens.check(Token::Assign) {
+        let value = parse_expression(tokens, notes)?;
+        return Ok(ast::Expression {
+            pos: subject.pos.start..value.pos.end,
+            kind: ast::ExpressionKind::Assignment(
+                Box::new(subject),
+                Box::new(value)
+            ),
+            id: NodeId::next()
+        });
+    }
+
+    Ok(subject)
 }
 
 pub fn parse_expression_call_or_field(

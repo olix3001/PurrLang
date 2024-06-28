@@ -480,6 +480,26 @@ pub fn resolve_expr(
             resolved_ty
         },
 
+        ast::ExpressionKind::Assignment(subject, value) => {
+            let subject_ty = resolve_expr(&subject, resolved, stack, notes)?;
+            let value_ty = resolve_expr(&value, resolved, stack, notes)?;
+
+            if !value_ty.matches(&subject_ty, resolved, notes) {
+                return Err(CompilerError::MismatchedTypes {
+                    pos: expr.pos.clone(),
+                    lhs: subject.pos.clone(),
+                    lhs_ty: subject_ty.pretty_name(&notes.project_tree),
+                    rhs: value.pos.clone(),
+                    rhs_ty: value_ty.pretty_name(&notes.project_tree),
+                    file: notes.current_file.clone()
+                });
+            }
+
+            resolved.types.insert(expr.id, value_ty.clone());
+
+            value_ty.clone()
+        }
+
         ast::ExpressionKind::Field(obj, field) => {
             let obj_ty = resolve_expr(
                 &obj,

@@ -430,6 +430,14 @@ pub fn compile_expr(
             panic!("Path resolution went wrong... sorry :c");
         }
 
+        ast::ExpressionKind::Assignment(subject, value) => {
+            let subject_value = compile_expr(&subject, builder, notes)?;
+            let value_value = compile_expr(&value, builder, notes)?;
+
+            write_variable(&subject_value, value_value, builder, notes)?;
+            Ok(subject_value)
+        }
+
         ast::ExpressionKind::Field(obj, field) => {
             let obj = compile_expr(&*obj, builder, notes)?;
             let Value::Struct(obj) = obj else {
