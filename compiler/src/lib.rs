@@ -1,5 +1,5 @@
 use ahash::{HashMap, HashMapExt};
-use codegen::{blocks::{ArgumentTy, BlocksBuilder, Mutation, Sb3Code, Sb3FunctionDefinition}, DataId};
+use codegen::{blocks::{ArgumentTy, BlocksBuilder, Mutation, Sb3Code, Sb3Field, Sb3FunctionDefinition}, DataId};
 use common::{FileRange, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
 use parser::ast::{self, NodeId};
@@ -276,6 +276,11 @@ pub fn compile_statements(
                         builder,
                         notes
                     )?;
+
+                    let mut stop = builder.block("control_stop");
+                    stop.block.as_mut().unwrap().mutation = Some(Mutation::no_next());
+                    stop.field("STOP_OPTION", Sb3Field::Argument("this script".to_string()));
+                    return Ok(());
                 }
             }
             ast::StatementKind::LetDefinition(definition) => {

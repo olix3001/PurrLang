@@ -59,24 +59,31 @@ pub struct Mutation {
     pub argumentids: Vec<String>,
     pub argumentnames: Vec<String>,
     pub argumentdefaults: Vec<String>,
-    pub warp: bool
+    pub warp: bool,
+    pub hasnext: bool
 }
 
 impl Serialize for Mutation {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: serde::Serializer {
-        let mut ser = serializer.serialize_struct("mutation", 7)?;
+        let mut number = 7;
+        if !self.hasnext { number = 3; }
+        let mut ser = serializer.serialize_struct("mutation", number)?;
         ser.serialize_field("tagName", "mutation")?;
         ser.serialize_field::<[u8]>("children", &[])?;
 
-        ser.serialize_field("proccode", &self.proccode)?;
-        ser.serialize_field("argumentids", 
-            &serde_json::ser::to_string(&self.argumentids).unwrap())?;
-        ser.serialize_field("argumentnames", 
-            &serde_json::ser::to_string(&self.argumentnames).unwrap())?;
-        ser.serialize_field("argumentdefaults", 
-            &serde_json::ser::to_string(&self.argumentdefaults).unwrap())?;
-        ser.serialize_field("warp", if self.warp { "true" } else { "false" })?;
+        if self.hasnext {
+            ser.serialize_field("proccode", &self.proccode)?;
+            ser.serialize_field("argumentids", 
+                &serde_json::ser::to_string(&self.argumentids).unwrap())?;
+            ser.serialize_field("argumentnames", 
+                &serde_json::ser::to_string(&self.argumentnames).unwrap())?;
+            ser.serialize_field("argumentdefaults", 
+                &serde_json::ser::to_string(&self.argumentdefaults).unwrap())?;
+            ser.serialize_field("warp", if self.warp { "true" } else { "false" })?;
+        } else {
+            ser.serialize_field("hasnext", &"false")?;
+        }
         ser.end()
     }
 }
@@ -88,7 +95,17 @@ impl Default for Mutation {
             argumentids: Vec::new(),
             argumentnames: Vec::new(),
             argumentdefaults: Vec::new(),
-            warp: false
+            warp: false,
+            hasnext: true
+        }
+    }
+}
+
+impl Mutation {
+    pub fn no_next() -> Self {
+        Self {
+            hasnext: false,
+            ..Default::default()
         }
     }
 }
