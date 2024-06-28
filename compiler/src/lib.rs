@@ -454,6 +454,13 @@ pub fn compile_expr(
                         );
                     }
 
+                    for (field_name, field_value) in block.fields.iter() {
+                        b.field(
+                            field_name,
+                            Sb3Field::Argument(field_value.clone())
+                        );
+                    }
+
                     Ok(Value::BlockCall(b.finish()))
                 },
                 Value::FunctionRef(id) => {

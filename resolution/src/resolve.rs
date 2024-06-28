@@ -31,6 +31,7 @@ pub struct ResolvedData {
 pub struct ResolvedBlock {
     pub opcode: String,
     pub inputs: Vec<String>,
+    pub fields: HashMap<String, String>
 }
 
 impl<'a> ResolutionNotes<'a> {
@@ -243,11 +244,26 @@ pub fn resolve_item_statements(
                     }
                 }
 
+                let mut block_fields = HashMap::new();
+
+                if let Some(fields_field) = block.body.iter().find(|f| f.name == "fields") {
+                    let ast::ExpressionKind::AnonStruct(fields) = &fields_field.value.kind
+                        else { panic!("Value for fields is not AnonStruct") };
+                    for field in fields.iter() {
+                        let ast::ExpressionKind::String(text) = &field.value.kind else {
+                            todo!("Create error for when block.fields is not a text literal. Got {:?}", field.value);
+                        };
+
+                        block_fields.insert(field.name.clone(), text.clone());
+                    }
+                }
+
                 resolved.blocks.insert(
                     item.id,
                     ResolvedBlock {
                         opcode: block.opcode.clone(),
-                        inputs
+                        inputs,
+                        fields: block_fields
                     }
                 );
             }
