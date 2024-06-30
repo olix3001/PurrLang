@@ -24,7 +24,8 @@ fn compile_single_argument_procedure() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 6);
@@ -55,7 +56,8 @@ fn compile_struct_argument_procedure() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 8);
@@ -88,7 +90,8 @@ fn compile_returning_procedure() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 13);

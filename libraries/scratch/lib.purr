@@ -20,3 +20,10 @@ block goto_xy(X: number, Y: number) motion_gotoxy {
 block say(MESSAGE: text) looks_say {
     inputs: .{ MESSAGE }
 }
+
+// Sensing
+block ask_and_wait(QUESTION: text) sensing_askandwait {
+  inputs: .{ QUESTION }
+}
+
+block get_answer() -> text sensing_answer {}

@@ -27,7 +27,8 @@ fn compile_returning_block() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 4);
@@ -50,7 +51,8 @@ fn compile_unary_operators() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 4);
@@ -81,7 +83,8 @@ fn compile_binary_operators() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 10);

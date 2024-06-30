@@ -23,3 +23,4 @@ resolution.workspace = true
 compiler.workspace = true
 codegen.workspace = true
 common.workspace = true
+optimizer.workspace = true

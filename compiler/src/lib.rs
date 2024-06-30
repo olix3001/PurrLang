@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ahash::{HashMap, HashMapExt};
 use codegen::{blocks::{ArgumentTy, BlocksBuilder, Mutation, Sb3Code, Sb3Field, Sb3FunctionDefinition, Sb3Value}, DataId};
 use common::{FileRange, PurrSource};
@@ -17,13 +19,15 @@ pub struct CompileNotes<'a> {
     proc_arguments: HashMap<NodeId, Value>,
     proc_definition_ids: HashMap<NodeId, DataId>,
     proc_returns: HashMap<NodeId, Value>,
-    current_proc: Option<NodeId>
+    current_proc: Option<NodeId>,
+    items_to_skip: HashSet<NodeId>
 }
 
 pub fn compile_purr(
     items: &Vec<ast::Item>,
     source: PurrSource,
-    resolved_data: &ResolvedData
+    resolved_data: &ResolvedData,
+    items_to_skip: HashSet<NodeId>
 ) -> Result<Sb3Code, CompilerError> {
     let mut notes = CompileNotes {
         current_file: source,
@@ -33,7 +37,8 @@ pub fn compile_purr(
         proc_arguments: HashMap::new(),
         proc_definition_ids: HashMap::new(),
         proc_returns: HashMap::new(),
-        current_proc: None
+        current_proc: None,
+        items_to_skip
     };
     let mut builder = BlocksBuilder::new();
 
@@ -57,6 +62,7 @@ pub fn compile_items_prepass(
     notes: &mut CompileNotes
 ) -> Result<(), CompilerError> {
     for item in items.iter() {
+        if notes.items_to_skip.contains(&item.id) { continue; }
         match &item.kind {
             ast::ItemKind::Module(module) => {
                 let temp_file = notes.current_file.clone();
@@ -129,6 +135,7 @@ pub fn compile_items(
     notes: &mut CompileNotes
 ) -> Result<(), CompilerError> {
     for item in items.iter() {
+        if notes.items_to_skip.contains(&item.id) { continue; }
         match &item.kind {
             ast::ItemKind::Module(module) => {
                 let temp_file = notes.current_file.clone();

@@ -260,10 +260,17 @@ fn build_file(
         }
     };
 
+    let items_to_skip = optimizer::optimize(
+        &mut ast.0,
+        &resolved,
+        &project_tree
+    ).unwrap(); // Currently implementation does not throw errors.
+
     let result = match compile_purr(
         &ast.0,
         PurrSource::File(src_path.to_path_buf()),
-        &resolved
+        &resolved,
+        items_to_skip
     ) {
         Ok(result) => result,
         Err(err) => {

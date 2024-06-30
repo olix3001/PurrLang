@@ -24,7 +24,8 @@ fn compile_single_variable() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
 
@@ -59,7 +60,8 @@ fn compile_flat_struct_variable() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 3);
@@ -92,7 +94,8 @@ fn compile_nested_struct() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 5);

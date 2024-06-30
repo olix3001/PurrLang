@@ -60,12 +60,16 @@ impl ResolvedTy {
                         pos: path_span,
                         file: file.clone()
                     }); }
+
                     if let Some(prefix) = current.imports.get(path.segments.first().unwrap()) {
                         let path = ResolutionPath {
                             segments: path.segments.iter().skip(1).cloned().collect()
                         };
                         let path = prefix.clone().join(&path);
 
+                        if let Some(target) = tree.resolve_lib(&path) {
+                            return Ok(Self::Path(target));
+                        }
                         if let Some(target) = tree.resolve_name(&path) {
                             return Ok(Self::Path(target));
                         }

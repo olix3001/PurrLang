@@ -224,7 +224,7 @@ pub enum TyKind {
     Function(Vec<Ty>, Box<Ty>)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct PurrPath {
     pub segments: Vec<PurrPathSegment>,
     pub pos: FileRange,

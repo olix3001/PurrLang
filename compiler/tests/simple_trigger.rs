@@ -18,7 +18,8 @@ fn compile_empty_green_flag() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 1);
@@ -46,7 +47,8 @@ fn compile_hello_world() {
     let code = compile_purr(
         &ast.0,
         PurrSource::Unknown,
-        &resolved
+        &resolved,
+        Default::default()
     ).unwrap();
 
     assert_eq!(code.blocks.len(), 2);
