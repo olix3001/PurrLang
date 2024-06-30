@@ -202,7 +202,8 @@ impl Serialize for Sb3Value {
 
 #[derive(Default)]
 struct InnerBuilderData {
-    previous: Option<DataId>
+    previous: Option<DataId>,
+    first: Option<DataId>
 }
 
 #[derive(Clone)]
@@ -254,11 +255,19 @@ impl BlocksBuilder {
         &mut self,
         previous: DataId
     ) {
-        self.data.borrow_mut().previous = Some(previous);
+        let mut data = self.data.borrow_mut();
+        let current_prev = data.previous.as_ref();
+        if data.first.as_ref() == current_prev {
+            data.first = Some(previous.clone());
+        }
+        data.previous = Some(previous);
     }
 
     pub fn previous(&self) -> DataId {
         self.data.borrow().previous.as_ref().unwrap().clone()
+    }
+    pub fn first(&self) -> Option<DataId> {
+        self.data.borrow().first.as_ref().cloned()
     }
 
     pub fn get_block_mut(
@@ -307,6 +316,10 @@ impl BlocksBuilder {
         } else {
             block.x = Some(self.start_x);
             block.y = Some(self.start_y);
+        }
+
+        if self.data.borrow().first.is_none() {
+            self.data.borrow_mut().first = Some(id.clone());
         }
 
         BlockBuilder::new(

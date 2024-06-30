@@ -2,7 +2,7 @@ use error::SyntaxError;
 use logos::{Logos, Lexer};
 use common::{FileRange, PurrSource};
 
-use crate::ast::{self, NodeId};
+use crate::ast::{self, Attributes, NodeId};
 
 macro_rules! expected {
     ($expected:expr, $tokens:expr, $notes:expr, $a:expr) => {
@@ -80,7 +80,7 @@ pub enum Token {
     #[token("enum")] Enum,
     #[token("struct")] Struct,
     #[token("impl")] Impl,
-    #[token("for")] For,
+    #[token("repeat")] Repeat,
     #[token("while")] While,
     #[token("loop")] Loop,
     #[token("if")] If,
@@ -131,12 +131,13 @@ impl<'src> Token {
                 => "terminator",
 
             Block | Const | Let | Cloud | Global | Enum | Struct |
-            Impl | For | While | Loop | If | Else | Return | Define |
+            Impl | Repeat | While | Loop | If | Else | Return | Define |
             Comptime | Match | Module | Break | Continue | Import => "keyword",
 
             NumberLit | HexNumberLit => "number literal",
             StringLit => "string literal",
             True | False => "boolean literal",
+
 
             Void | Number | Text | Ptr | Bool => "type",
         }
@@ -432,6 +433,29 @@ pub fn parse_statement(
             )
         }
 
+        Some(Token::If) => parse_conditional(tokens, notes)?,
+        Some(Token::Repeat) => {
+            let count = parse_expression(tokens, notes)?;
+            expect(tokens, notes, Token::Arrow)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            ast::StatementKind::Repeat(
+                Box::new(count),
+                body
+            )
+        }
+
+        Some(Token::While) => {
+            let condition = parse_expression(tokens, notes)?;
+            expect(tokens, notes, Token::Arrow)?;
+            expect(tokens, notes, Token::LCurly)?;
+            let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+
+            ast::StatementKind::While(
+                Box::new(condition),
+                body
+            )
+        }
 
         Some(Token::Return) => {
             if tokens.check(Token::Semi) { ast::StatementKind::Return(None) }
@@ -473,6 +497,45 @@ pub fn parse_statement(
         pos: start_pos..end_pos,
         id: NodeId::next()
     })
+}
+
+fn parse_conditional(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::StatementKind, SyntaxError> {
+    let condition = parse_expression(tokens, notes)?;
+    expect(tokens, notes, Token::Arrow)?;
+    expect(tokens, notes, Token::LCurly)?;
+    let body = parse_statements_until(tokens, notes, Token::RCurly)?;
+
+    let mut stmt = ast::StatementKind::Conditional(
+        Box::new(condition),
+        body,
+        None
+    );
+    
+    if tokens.check(Token::Else) {
+        let start_pos = tokens.position().unwrap().start;
+        let else_ = if tokens.peek() == Some(Token::If) {
+            vec![
+                ast::Statement {
+                    kind: parse_conditional(tokens, notes)?,
+                    pos: start_pos..tokens.position().unwrap().end,
+                    attributes: Attributes::default(),
+                    id: NodeId::next()
+                }
+            ]
+        } else { 
+            expect(tokens, notes, Token::LCurly)?;
+            parse_statements_until(tokens, notes, Token::RCurly)?
+        };
+
+        let ast::StatementKind::Conditional(_, _, ref mut else_cond) = stmt
+            else { unreachable!() };
+        *else_cond = Some(else_);
+    }
+
+    Ok(stmt)
 }
 
 pub fn parse_expression(

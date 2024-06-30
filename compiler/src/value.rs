@@ -4,8 +4,6 @@ use error::CompilerError;
 use parser::ast::NodeId;
 use resolution::{resolve::{ResolvedBlock, ResolvedData}, ResolvedTy};
 
-use crate::CompileNotes;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Empty,

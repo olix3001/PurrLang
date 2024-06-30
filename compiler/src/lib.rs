@@ -289,7 +289,63 @@ pub fn compile_statements(
                     stop.field("STOP_OPTION", Sb3Field::Argument("this script".to_string()));
                     return Ok(());
                 }
+
+                let mut stop = builder.block("control_stop");
+                stop.block.as_mut().unwrap().mutation = Some(Mutation::no_next());
+                stop.field("STOP_OPTION", Sb3Field::Argument("this script".to_string()));
+                return Ok(());
             }
+
+            ast::StatementKind::Conditional(condition, if_true, if_false) => {
+                let mut b = builder.block(
+                    if if_false.is_some() { "control_if_else" }
+                    else { "control_if" }
+                );
+
+                let condition = compile_expr(&condition, builder, notes)?;
+                b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
+
+                let mut substack_builder = builder.subbuilder_for(b.id());
+                compile_statements(&if_true, &mut substack_builder, notes)?;
+                if let Some(first) = substack_builder.first() {
+                    b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
+                }
+
+                if let Some(if_false) = &if_false {
+                    let mut substack_builder = builder.subbuilder_for(b.id());
+                    compile_statements(&if_false, &mut substack_builder, notes)?;
+                    if let Some(first) = substack_builder.first() {
+                        b.input("SUBSTACK2", &[Sb3Value::Ptr(first)]);
+                    }
+                }
+            }
+
+            ast::StatementKind::Repeat(count, body) => {
+                let mut b = builder.block("control_repeat");
+
+                let count = compile_expr(&count, builder, notes)?;
+                b.input("TIMES", &[count.into_sb3(builder, b.id())?]);
+
+                let mut substack_builder = builder.subbuilder_for(b.id());
+                compile_statements(&body, &mut substack_builder, notes)?;
+                if let Some(first) = substack_builder.first() {
+                    b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
+                }
+            }
+
+            ast::StatementKind::While(condition, body) => {
+                let mut b = builder.block("control_repeat_until");
+
+                let condition = compile_expr(&condition, builder, notes)?;
+                b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
+
+                let mut substack_builder = builder.subbuilder_for(b.id());
+                compile_statements(&body, &mut substack_builder, notes)?;
+                if let Some(first) = substack_builder.first() {
+                    b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
+                }
+            }
+
             ast::StatementKind::LetDefinition(definition) => {
                 let ty = notes.resolved_data.types.get(&stmt.id).unwrap();
                 let variable = define_variables_for_type(
@@ -347,7 +403,7 @@ fn write_variable(
                 )?;
             }
         }
-        _ => panic!("value {value:?} is not writable!")
+        _ => {}
     }
     Ok(())
 }
@@ -489,8 +545,20 @@ pub fn compile_expr(
                         else { unreachable!() };
 
                     call_function(builder, definition, flat_args.as_slice())?;
+
+                    // If calls are chained return values can override each other.
+                    let ret_ty = notes.resolved_data.types.get(&expr.id).unwrap();
+                    let call_vars = define_variables_for_type(
+                        "call:",
+                        expr.id,
+                        ret_ty,
+                        builder,
+                        notes
+                    )?;
                     
-                    get_proc_return(id, builder, notes)
+                    let proc_ret = get_proc_return(id, builder, notes)?;
+                    write_variable(&call_vars, proc_ret, builder, notes)?;
+                    Ok(call_vars)
                 },
                 _ => return Err(CompilerError::Custom(
                     create_error(

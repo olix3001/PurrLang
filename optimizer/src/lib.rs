@@ -27,5 +27,7 @@ pub fn optimize(
         &node_ids
     );
 
+    // TODO: Inline variables used only once.
+
     Ok(unused_nodes)
 }

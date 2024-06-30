@@ -151,6 +151,20 @@ pub(crate) fn find_usages_in_statements(
                 find_usages_in_expression(&expr, resolved, project_tree, graph, current_id, node_ids)?;
             }
 
+            ast::StatementKind::Conditional(cond, if_true, if_false) => {
+                find_usages_in_expression(&cond, resolved, project_tree, graph, current_id, node_ids)?;
+                find_usages_in_statements(if_true, resolved, project_tree, graph, current_id, node_ids)?;
+                if let Some(if_false) = &if_false {
+                    find_usages_in_statements(if_false, resolved, project_tree, graph, current_id, node_ids)?;
+                }
+            }
+
+            ast::StatementKind::Repeat(cc, body) |
+            ast::StatementKind::While(cc, body) => {
+                find_usages_in_expression(&cc, resolved, project_tree, graph, current_id, node_ids)?;
+                find_usages_in_statements(body, resolved, project_tree, graph, current_id, node_ids)?;
+            }
+
             ast::StatementKind::LetDefinition(definition) => {
                 if let Some(value) = &definition.value {
                     find_usages_in_expression(value, resolved, project_tree, graph, current_id, node_ids)?;

@@ -130,6 +130,10 @@ impl ResolvedTy {
             },
             (ResolvedTy::Number, ResolvedTy::Text) => true,
             (ResolvedTy::Bool, ResolvedTy::Text) => true,
+
+            // Temporary solution
+            (ResolvedTy::Text, ResolvedTy::Number) => true,
+
             (a, b) => a == b
         }
     }

@@ -377,6 +377,71 @@ pub fn resolve_statements(
                 stack.top().define_variable(&definition.symbol, stmt.id);
             },
 
+            ast::StatementKind::Conditional(cond, if_true, if_false) => {
+                let cond_ty = resolve_expr(&cond, resolved, stack, notes)?;
+
+                if !cond_ty.matches(&ResolvedTy::Bool, resolved, notes) {
+                    return Err(CompilerError::UnexpectedType {
+                        pos: cond.pos.clone(),
+                        file: notes.current_file.clone(),
+                        expected_type: ResolvedTy::Bool.pretty_name(&notes.project_tree),
+                        found_type: cond_ty.pretty_name(&notes.project_tree)
+                    });
+                }
+
+                let temp = notes.expected_block_ty.take();
+                notes.expected_block_ty = Some((ResolvedTy::Void, stmt.pos.clone()));
+                stack.push();
+                resolve_statements(if_true, resolved, stack, notes)?;
+                stack.pop();
+                if let Some(if_false) = &if_false {
+                    stack.push();
+                    resolve_statements(if_false, resolved, stack, notes)?;
+                    stack.pop();
+                }
+                notes.expected_block_ty = temp;
+            }
+
+            ast::StatementKind::Repeat(count, body) => {
+                let count_ty = resolve_expr(&count, resolved, stack, notes)?;
+
+                if !count_ty.matches(&ResolvedTy::Number, resolved, notes) {
+                    return Err(CompilerError::UnexpectedType {
+                        pos: count.pos.clone(),
+                        file: notes.current_file.clone(),
+                        expected_type: ResolvedTy::Number.pretty_name(&notes.project_tree),
+                        found_type: count_ty.pretty_name(&notes.project_tree)
+                    });
+                }
+
+                let temp = notes.expected_block_ty.take();
+                notes.expected_block_ty = Some((ResolvedTy::Void, stmt.pos.clone()));
+                stack.push();
+                resolve_statements(body, resolved, stack, notes)?;
+                stack.pop();
+                notes.expected_block_ty = temp;
+            }
+
+            ast::StatementKind::While(cond, body) => {
+                let cond_ty = resolve_expr(&cond, resolved, stack, notes)?;
+
+                if !cond_ty.matches(&ResolvedTy::Bool, resolved, notes) {
+                    return Err(CompilerError::UnexpectedType {
+                        pos: cond.pos.clone(),
+                        file: notes.current_file.clone(),
+                        expected_type: ResolvedTy::Bool.pretty_name(&notes.project_tree),
+                        found_type: cond_ty.pretty_name(&notes.project_tree)
+                    });
+                }
+
+                let temp = notes.expected_block_ty.take();
+                notes.expected_block_ty = Some((ResolvedTy::Void, stmt.pos.clone()));
+                stack.push();
+                resolve_statements(body, resolved, stack, notes)?;
+                stack.pop();
+                notes.expected_block_ty = temp;
+            }
+
             ast::StatementKind::Expr(expr) => {
                 let expr_ty = 
                     resolve_expr(&expr, resolved, stack, notes)?;
@@ -622,6 +687,8 @@ pub fn resolve_expr(
                 }
             }
 
+            resolved.types.insert(expr.id, *callee_ret_ty.clone());
+
             *callee_ret_ty.clone()
         },
 
@@ -748,7 +815,7 @@ pub fn resolve_expr(
                 resolved: &ResolvedData,
                 notes: &ResolutionNotes
             ) -> Result<(), CompilerError> {
-                if a_ty.resolve_to_top(resolved) != ResolvedTy::Number {
+                if !a_ty.resolve_to_top(resolved).matches(&ResolvedTy::Number, resolved, notes) {
                     return Err(CompilerError::MismatchedTypes {
                         pos: expr.pos.clone(),
                         lhs: a.pos.clone(),
@@ -758,7 +825,7 @@ pub fn resolve_expr(
                         file: notes.current_file.clone()
                     });
                 }
-                if b_ty.resolve_to_top(resolved) != ResolvedTy::Number {
+                if !b_ty.resolve_to_top(resolved).matches(&ResolvedTy::Number, resolved, notes) {
                     return Err(CompilerError::MismatchedTypes {
                         pos: expr.pos.clone(),
                         lhs: expr.pos.clone(),
@@ -830,7 +897,7 @@ pub fn resolve_expr(
                 }
 
                 ast::BinaryOp::And | ast::BinaryOp::Or => {
-                    if a_ty.resolve_to_top(resolved) != ResolvedTy::Bool {
+                    if !a_ty.resolve_to_top(resolved).matches(&ResolvedTy::Bool, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
                             pos: expr.pos.clone(),
                             lhs: a.pos.clone(),
@@ -840,7 +907,7 @@ pub fn resolve_expr(
                             file: notes.current_file.clone()
                         });
                     }
-                    if b_ty.resolve_to_top(resolved) != ResolvedTy::Bool {
+                    if !b_ty.resolve_to_top(resolved).matches(&ResolvedTy::Bool, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
                             pos: expr.pos.clone(),
                             lhs: expr.pos.clone(),

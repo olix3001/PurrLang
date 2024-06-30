@@ -54,6 +54,10 @@ pub enum StatementKind {
 
     LetDefinition(LetDefinition),
 
+    Conditional(Box<Expression>, Vec<Statement>, Option<Vec<Statement>>),
+    Repeat(Box<Expression>, Vec<Statement>),
+    While(Box<Expression>, Vec<Statement>),
+
     Return(Option<Expression>),
     Break,
     Continue,

@@ -89,6 +89,12 @@ pub enum CompilerError {
         rhs_ty: String,
         file: PurrSource
     },
+    UnexpectedType {
+        pos: FileRange,
+        file: PurrSource,
+        found_type: String,
+        expected_type: String
+    },
     UnknownField {
         field: FileRange,
         definition: FileRange,
@@ -125,6 +131,16 @@ impl From<CompilerError> for ErrorReport {
                         )
                     ],
                     Some("Ensure those two types match by changing one of them.")
+                ),
+            CompilerError::UnexpectedType { pos, file, found_type, expected_type } =>
+                create_error(
+                    ErrorInfo::from_area(CodeArea { pos: pos.clone(), file: file.clone() }),
+                    "Compilation error",
+                    &[(
+                        CodeArea { pos, file },
+                        &format!("Unexpected type: Expected {} but got {}", expected_type, found_type),
+                    )],
+                    Some("Ensure that this path is spelled correctly and that It exists.")
                 ),
             CompilerError::UnknownField { field, definition, file } =>
                 create_error(
