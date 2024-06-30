@@ -67,7 +67,7 @@ pub fn compile_items_prepass(
             ast::ItemKind::Module(module) => {
                 let temp_file = notes.current_file.clone();
                 notes.current_file = module.source.clone();
-                compile_items(&module.body, builder, notes)?;
+                compile_items_prepass(&module.body, builder, notes)?;
                 notes.current_file = temp_file;
             }
 

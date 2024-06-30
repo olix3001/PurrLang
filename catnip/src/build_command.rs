@@ -297,7 +297,13 @@ fn inline_library(
 
     let src = fs::read_to_string(&lib_entry).unwrap();
     let source = PurrSource::File(lib_entry.clone());
-    let mod_ast = parse_purr(src, source.clone())?;
+    let mut mod_ast = parse_purr(src, source.clone())?;
+
+    inline_file_modules(
+        &lib_entry,
+        &mut mod_ast.0
+    )?;
+    
     ast.push(ast::Item {
         kind: ast::ItemKind::Module(ast::ModuleDefinition {
             name: name.to_string(),
@@ -308,11 +314,7 @@ fn inline_library(
         pos: 0..0,
         attributes: mod_ast.1.attributes
     });
-
-    inline_file_modules(
-        &lib_entry,
-        ast
-    )
+    Ok(())
 }
 
 fn inline_file_modules(

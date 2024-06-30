@@ -1,0 +1,47 @@
+block move_steps(STEPS: number) motion_movesteps {
+  inputs: .{ STEPS }
+}
+
+block turn_right(DEGREES: number) motion_turnright {
+  inputs: .{ DEGREES }
+}
+block turn_left(DEGREES: number) motion_turnleft {
+  inputs: .{ DEGREES }
+}
+
+// TODO: GOTO
+
+block goto_xy(X: number, Y: number) motion_gotoxy {
+  inputs: .{ X, Y }
+}
+
+// TODO: Glide to
+
+block glide_xy(X: number, Y: number, SECS: number) motion_glidesecstoxy {
+  inputs: .{ X, Y, SECS }
+}
+
+block point_direction(DIRECTION: number) motion_pointindirection {
+  inputs: .{ DIRECTION }
+}
+
+// TODO: Point towards
+
+block change_x_by(DX: number) motion_changexby {
+  inputs: .{ DX }
+}
+block set_x(X: number) motion_setx {
+  inputs: .{ X }
+}
+
+block change_y_by(DY: number) motion_changeyby {
+  inputs: .{ DY }
+}
+block set_y(Y: number) motion_sety {
+  inputs: .{ Y }
+}
+
+block bounce_edege() motion_ifonedgebounce {}
+block get_x() -> number motion_xposition {}
+block get_y() -> number motion_yposition {}
+block get_direction() -> number motion_direction {}

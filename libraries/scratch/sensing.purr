@@ -1,0 +1,27 @@
+block ask_and_wait(QUESTION: text) sensing_askandwait {
+  inputs: .{ QUESTION }
+}
+
+block get_answer() -> text sensing_answer {}
+
+// TODO: Colors (requires additional type?)
+
+// TODO: Distance to mouse (implement #[shadow] tag)
+
+block is_mouse_down() -> bool sensing_mousedown {}
+block get_mouse_x() -> number sensing_mousex {}
+block get_mouse_y() -> number sensing_mousey {}
+
+block enable_drag() sensing_setdragmode {
+  fields: .{ DRAG_MODE: "draggable" }
+}
+block disable_drag() sensing_setdragmode {
+  fields: .{ DRAG_MODE: "not draggable" }
+}
+
+block get_loudness() -> number sensing_loudness {}
+block get_timer() -> number sensing_timer {}
+
+block reset_timer() sensing_resettimer {}
+
+block get_username() -> text sensing_username {}

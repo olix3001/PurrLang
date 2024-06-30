@@ -1,0 +1,22 @@
+block say_for(MESSAGE: text, SECS: number) looks_sayforsecs {
+    inputs: .{ MESSAGE, SECS }
+}
+block say(MESSAGE: text) looks_say {
+    inputs: .{ MESSAGE }
+}
+
+block think_for(MESSAGE: text, SECS: number) looks_thinkforsecs {
+    inputs: .{ MESSAGE, SECS }
+}
+block think(MESSAGE: text) looks_think {
+    inputs: .{ MESSAGE }
+}
+
+// TODO: Costume-related
+
+block set_size(SIZE: number) looks_setsizeto {
+  inputs: .{ SIZE }
+}
+
+block show() looks_show {}
+block hide() looks_hide {}

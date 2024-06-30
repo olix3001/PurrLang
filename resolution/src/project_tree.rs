@@ -113,8 +113,9 @@ impl ProjectTree {
 
         match &tree.kind {
             ast::ImportKind::Name => {
+                let import_name = prefix.segments.last().cloned().unwrap();
                 self.imports.insert(
-                    prefix.segments.last().cloned().unwrap(),
+                    import_name,
                     prefix
                 );
             },

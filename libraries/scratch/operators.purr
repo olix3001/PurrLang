@@ -1,0 +1,21 @@
+block random(FROM: number, TO: number) -> number operator_random {
+  inputs: .{ FROM, TO }
+}
+
+block nth_letter_of(STRING: text, LETTER: number) -> text operator_letter_of {
+  inputs: .{ STRING, LETTER }
+}
+
+block length_of(STRING: text) -> number operator_length {
+  inputs: .{ STRING }
+}
+
+block contains(STRING1: text, STRING2: text) -> bool operator_contains {
+  inputs: .{ STRING1, STRING2 }
+}
+
+block round(NUM: number) -> number operator_round {
+  inputs: .{ NUM }
+}
+
+// TODO: mathops (and remember about triggers!)
