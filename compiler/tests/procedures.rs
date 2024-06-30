@@ -1,4 +1,3 @@
-use codegen::{build_project_json, DataId};
 use common::PurrSource;
 use compiler::compile_purr;
 use parser::parser::parse_purr;
@@ -19,7 +18,7 @@ fn compile_single_argument_procedure() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(
@@ -50,7 +49,7 @@ fn compile_struct_argument_procedure() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(
@@ -83,7 +82,7 @@ fn compile_returning_procedure() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(

@@ -1,8 +1,8 @@
-use std::{env::current_dir, fs, io::{BufWriter, Write}, path::{Path, PathBuf}};
+use std::{env::current_dir, fs, io::{BufWriter, Write}, path::{Path, PathBuf}, rc::Rc};
 
 use codegen::blocks::Sb3Code;
 use colored::Colorize;
-use common::PurrSource;
+use common::{PurrLib, PurrSource};
 use compiler::compile_purr;
 use error::{create_error_report, ErrorReport, SyntaxError};
 use once_cell::sync::Lazy;
@@ -226,6 +226,19 @@ fn build_file(
         }
     };
 
+    let mut libs = common::Libraries::default();
+    std::env::set_var("PURR_PATH", "/Users/olix3001/Documents/Projekty/PurrLang/");
+    let purr_path = std::env::var("PURR_PATH").unwrap();
+    let purr_path = PathBuf::from(purr_path);
+    libs.register("scratch", PurrLib {
+        path: purr_path.join("libraries/scratch")
+    });
+    let libs = Rc::new(libs);
+
+    for (lib_name, lib) in libs.libs.iter() {
+        inline_library(lib_name, lib, &mut ast.0).unwrap();
+    }
+
     match inline_file_modules(&src_path, &mut ast.0) {
         Ok(_) => {},
         Err(err) => {
@@ -237,7 +250,7 @@ fn build_file(
 
     // TODO: Clean modules that are not imported
 
-    let project_tree = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let project_tree = ProjectTree::build_from_ast(Default::default(), &ast.0, libs);
     let resolved = match resolution::resolve::resolve(&ast, &project_tree) {
         Ok(resolved) => resolved,
         Err(err) => {
@@ -261,6 +274,38 @@ fn build_file(
     };
 
     Some(result)
+}
+
+fn inline_library(
+    name: &str,
+    lib: &PurrLib,
+    ast: &mut Vec<parser::ast::Item>
+) -> Result<(), SyntaxError> {
+    use parser::ast;
+
+    let lib_entry = lib.path.join("lib.purr");
+    if !lib_entry.exists() {
+        panic!("Unable to find lib.purr in library {lib:?}!");
+    }
+
+    let src = fs::read_to_string(&lib_entry).unwrap();
+    let source = PurrSource::File(lib_entry.clone());
+    let mod_ast = parse_purr(src, source.clone())?;
+    ast.push(ast::Item {
+        kind: ast::ItemKind::Module(ast::ModuleDefinition {
+            name: name.to_string(),
+            body: mod_ast.0,
+            source
+        }) ,
+        id: NodeId::next(),
+        pos: 0..0,
+        attributes: mod_ast.1.attributes
+    });
+
+    inline_file_modules(
+        &lib_entry,
+        ast
+    )
 }
 
 fn inline_file_modules(

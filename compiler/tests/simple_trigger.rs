@@ -12,7 +12,7 @@ fn compile_empty_green_flag() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(
@@ -40,7 +40,7 @@ fn compile_hello_world() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(

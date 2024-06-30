@@ -1,5 +1,8 @@
+use std::rc::Rc;
+
 use ahash::HashMap;
 
+use common::Libraries;
 use parser::ast;
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -34,17 +37,22 @@ impl ResolutionPath {
 
 /// Project tree contains all information
 /// about modules and data related to them.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone)]
 pub struct ProjectTree {
     /// Modules can contain subtrees and this
     /// field maps those modules to their subtrees.
     pub subtrees: HashMap<String, ProjectTree>,
     pub imports: HashMap<String, ResolutionPath>,
-    pub names: HashMap<String, ast::NodeId>
+    pub names: HashMap<String, ast::NodeId>,
+    pub libs: Rc<Libraries>
 }
 
 impl ProjectTree {
-    pub fn build_from_ast(prefix: ResolutionPath, ast: &Vec<ast::Item>) -> Self {
+    pub fn build_from_ast(
+        prefix: ResolutionPath, 
+        ast: &Vec<ast::Item>,
+        libs: Rc<Libraries>
+    ) -> Self {
         let mut tree = Self::default();
         for item in ast.iter() {
             match &item.kind {
@@ -55,7 +63,8 @@ impl ProjectTree {
                             prefix
                                 .clone()
                                 .join(&[module.name.as_str()].as_slice().into()),
-                            &module.body
+                            &module.body,
+                            Rc::clone(&libs)
                         )
                     );
                     tree.names.insert(
@@ -89,6 +98,7 @@ impl ProjectTree {
             }
         }
 
+        tree.libs = libs;
         tree
     }
 
@@ -112,6 +122,12 @@ impl ProjectTree {
                 }
             }
         }
+    }
+
+    pub fn resolve_lib(&self, path: &ResolutionPath) -> Option<ast::NodeId> {
+        if self.libs.get(path.segments.first().unwrap()).is_some() {
+            self.resolve_name(path)
+        } else { None }
     }
 
     pub fn resolve_name(&self, path: &ResolutionPath) -> Option<ast::NodeId> {

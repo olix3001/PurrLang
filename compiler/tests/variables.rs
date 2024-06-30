@@ -18,7 +18,7 @@ fn compile_single_variable() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(
@@ -53,7 +53,7 @@ fn compile_flat_struct_variable() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(
@@ -86,7 +86,7 @@ fn compile_nested_struct() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
 
     let code = compile_purr(

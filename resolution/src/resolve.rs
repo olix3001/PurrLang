@@ -1,11 +1,11 @@
 use ahash::{HashMap, HashMapExt};
-use common::{FileRange, PurrSource};
+use common::{FileRange, Libraries, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
 use parser::{ast::{self, NodeId}, parser::ParseNotes};
 use crate::project_tree::{ProjectTree, ResolutionPath};
 use super::ResolvedTy;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ResolutionNotes<'a> {
     current_path: ResolutionPath,
     current_file: PurrSource,
@@ -15,7 +15,7 @@ pub struct ResolutionNotes<'a> {
     default_ret_ty: ResolvedTy,
     ast: &'a Vec<ast::Item>,
     struct_field_positions: HashMap<NodeId, HashMap<String, FileRange>>,
-    items_positions: HashMap<NodeId, FileRange>
+    items_positions: HashMap<NodeId, FileRange>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -35,7 +35,10 @@ pub struct ResolvedBlock {
 }
 
 impl<'a> ResolutionNotes<'a> {
-    pub fn from_ast(ast: &'a (Vec<ast::Item>, ParseNotes), project_tree: &'a ProjectTree) -> Self {
+    pub fn from_ast(
+        ast: &'a (Vec<ast::Item>, ParseNotes), 
+        project_tree: &'a ProjectTree,
+    ) -> Self {
         Self {
             current_path: ResolutionPath::default(),
             current_file: ast.1.file.clone(),
@@ -45,7 +48,7 @@ impl<'a> ResolutionNotes<'a> {
             default_ret_ty: ResolvedTy::Void,
             ast: &ast.0,
             struct_field_positions: HashMap::new(),
-            items_positions: HashMap::new()
+            items_positions: HashMap::new(),
         }
     }
 }
@@ -112,7 +115,7 @@ impl Rib {
 
 pub fn resolve(
     ast: &(Vec<ast::Item>, ParseNotes),
-    project_tree: &ProjectTree
+    project_tree: &ProjectTree,
 ) -> Result<ResolvedData, CompilerError> {
     let mut data = ResolvedData::default();
     let mut notes = ResolutionNotes::from_ast(ast, project_tree);
@@ -177,14 +180,12 @@ pub fn resolve_tl_types(
                 notes.struct_field_positions.insert(item.id, map);
                 resolved.types.insert(
                     item.id,
-                    ResolvedTy::from_ast_ty(
+                    resolve_ty(
                         &ast::Ty {
                             kind: ast::TyKind::AnonStruct(struct_.fields.clone()),
                             pos: 0..0
                         },
-                        &notes.current_path,
-                        &notes.project_tree,
-                        &notes.current_file
+                        &notes,
                     )?
                 );
             },
@@ -871,7 +872,7 @@ fn resolve_ty(
         ty,
         &notes.current_path,
         &notes.project_tree,
-        &notes.current_file
+        &notes.current_file,
     )
 }
 

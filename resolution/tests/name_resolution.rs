@@ -22,7 +22,7 @@ fn resolve_project_tree_names() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
 
     assert_eq!(names.resolve_name(&["hello"].as_slice().into()), Some(NodeId::new(5)));
     assert_eq!(names.resolve_name(&["hello", "world"].as_slice().into()), Some(NodeId::new(3)));

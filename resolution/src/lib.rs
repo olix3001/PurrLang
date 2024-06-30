@@ -43,6 +43,11 @@ impl ResolvedTy {
                 // Maybe we need to resolve first segment from import.
                 let path_span = path.pos.clone();
                 let path: ResolutionPath = path.clone().into();
+
+                if let Some(target) = tree.resolve_lib(&path) {
+                    return Ok(Self::Path(target));
+                }
+
                 if let Some(target) = tree.resolve_name(
                     &current.clone().join(&path)
                 ) {

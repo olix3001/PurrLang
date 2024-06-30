@@ -27,7 +27,7 @@ fn resolve_project_types() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let resolved = resolve(&ast, &names).unwrap();
     // panic!("{resolved:?}");
 
@@ -79,7 +79,7 @@ fn resolve_field_names_unknown() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
 
@@ -98,7 +98,7 @@ fn resolve_missing_field() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
 
@@ -116,7 +116,7 @@ fn resolve_field_types() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
 
@@ -139,7 +139,7 @@ fn cast_anon_struct() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
 
@@ -152,7 +152,7 @@ fn resolve_anon_struct() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
 
@@ -167,7 +167,7 @@ fn trigger_requires_void_mismatch() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
 
@@ -180,6 +180,6 @@ fn trigger_requires_void() {
     ";
 
     let ast = parse_purr(SOURCE.to_string(), PurrSource::Unknown).unwrap();
-    let names = ProjectTree::build_from_ast(Default::default(), &ast.0);
+    let names = ProjectTree::build_from_ast(Default::default(), &ast.0, Default::default());
     let _resolved = resolve(&ast, &names).unwrap();
 }
