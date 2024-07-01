@@ -29,7 +29,7 @@ impl Value {
                     value.push(field.clone());
                 }
             }
-            v @ _ => value.push(v)
+            v => value.push(v)
         }
         value
     }
@@ -89,7 +89,7 @@ impl Value {
     ) -> Result<Sb3Field, CompilerError> {
         match self {
             Self::Variable(id) => {
-                let name = builder.get_variable_name(&id);
+                let name = builder.get_variable_name(id);
                 Ok(Sb3Field::Variable(id.clone(), name))
             },
             _ => panic!("Temporary Error: Type {self:?} is not convertible to scratch field.")

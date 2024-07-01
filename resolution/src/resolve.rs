@@ -1,5 +1,5 @@
 use ahash::{HashMap, HashMapExt};
-use common::{FileRange, Libraries, PurrSource};
+use common::{FileRange, PurrSource};
 use error::{create_error, info::CodeArea, CompilerError};
 use parser::{ast::{self, NodeId}, parser::ParseNotes};
 use crate::project_tree::{ProjectTree, ResolutionPath};
@@ -57,6 +57,12 @@ pub struct Stack {
     ribs: Vec<Rib>
 }
 
+impl Default for Stack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Stack {
     pub fn new() -> Self {
         Self {
@@ -89,7 +95,7 @@ impl Stack {
     }
 
     pub fn top(&mut self) -> &mut Rib {
-        if self.ribs.len() == 0 {
+        if self.ribs.is_empty() {
             self.ribs.push(Rib::new());
         }
 
@@ -99,6 +105,12 @@ impl Stack {
 
 pub struct Rib {
     variables: HashMap<String, NodeId>
+}
+
+impl Default for Rib {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Rib {
@@ -188,7 +200,7 @@ pub fn resolve_tl_types(
                             kind: ast::TyKind::AnonStruct(struct_.fields.clone()),
                             pos: 0..0
                         },
-                        &notes,
+                        notes,
                     )?
                 );
             },
@@ -243,7 +255,7 @@ pub fn resolve_item_statements(
                         let origin_index = block.signature.arguments.iter()
                             .position(|arg| Some(arg.id) == origin);
                         if let Some(origin_index) = origin_index {
-                            if inputs[origin_index] != "" {
+                            if !inputs[origin_index].is_empty() {
                                 panic!("Temporary Error: Block arguments may be used only once") 
                             }
                             inputs[origin_index] = field.name.clone();
@@ -294,14 +306,14 @@ pub fn resolve_item_statements(
                     &mut stack,
                     notes
                 )?;
-                if !block_return_type.matches(&*return_type, resolved, notes) {
+                if !block_return_type.matches(&return_type, resolved, notes) {
                     return Err(CompilerError::MismatchedTypes {
                         pos: item.pos.clone(),
                         lhs: definition.signature.return_type.pos.clone(),
-                        lhs_ty: return_type.pretty_name(&notes.project_tree),
+                        lhs_ty: return_type.pretty_name(notes.project_tree),
                         rhs: definition.body.last().map(|rhs| rhs.pos.clone())
                             .unwrap_or(item.pos.clone()).clone(),
-                        rhs_ty: block_return_type.pretty_name(&notes.project_tree),
+                        rhs_ty: block_return_type.pretty_name(notes.project_tree),
                         file: notes.current_file.clone()
                     });
                 }
@@ -311,7 +323,7 @@ pub fn resolve_item_statements(
 
             ast::ItemKind::Trigger(trigger) => {
                 for argument in trigger.arguments.iter() {
-                    resolve_expr(&argument, resolved, &mut Stack::new(), notes)?;
+                    resolve_expr(argument, resolved, &mut Stack::new(), notes)?;
                 }
 
                 notes.expected_ret_ty = Some((
@@ -333,10 +345,10 @@ pub fn resolve_item_statements(
                     return Err(CompilerError::MismatchedTypes {
                         pos: item.pos.clone(),
                         lhs: item.pos.clone(),
-                        lhs_ty: ResolvedTy::Void.pretty_name(&notes.project_tree),
+                        lhs_ty: ResolvedTy::Void.pretty_name(notes.project_tree),
                         rhs: trigger.body.last().map(|rhs| rhs.pos.clone())
                             .unwrap_or(item.pos.clone()).clone(),
-                        rhs_ty: block_return_type.pretty_name(&notes.project_tree),
+                        rhs_ty: block_return_type.pretty_name(notes.project_tree),
                         file: notes.current_file.clone()
                     });
                 }
@@ -367,15 +379,15 @@ pub fn resolve_statements(
                 }
 
                 if let Some(rhs) = &definition.value {
-                    let return_type = resolve_expr(&rhs, resolved, stack, notes, )?;
+                    let return_type = resolve_expr(rhs, resolved, stack, notes, )?;
                     if let Some(lhs_ty) = resolved.types.get(&stmt.id) {
-                        if !return_type.matches(&lhs_ty, resolved, notes) {
+                        if !return_type.matches(lhs_ty, resolved, notes) {
                             return Err(CompilerError::MismatchedTypes {
                                 pos: stmt.pos.clone(),
                                 lhs: definition.ty.pos.clone(),
-                                lhs_ty: lhs_ty.pretty_name(&notes.project_tree),
+                                lhs_ty: lhs_ty.pretty_name(notes.project_tree),
                                 rhs: rhs.pos.clone(),
-                                rhs_ty: return_type.pretty_name(&notes.project_tree),
+                                rhs_ty: return_type.pretty_name(notes.project_tree),
                                 file: notes.current_file.clone()
                             });
                         }
@@ -388,14 +400,14 @@ pub fn resolve_statements(
             },
 
             ast::StatementKind::Conditional(cond, if_true, if_false) => {
-                let cond_ty = resolve_expr(&cond, resolved, stack, notes)?;
+                let cond_ty = resolve_expr(cond, resolved, stack, notes)?;
 
                 if !cond_ty.matches(&ResolvedTy::Bool, resolved, notes) {
                     return Err(CompilerError::UnexpectedType {
                         pos: cond.pos.clone(),
                         file: notes.current_file.clone(),
-                        expected_type: ResolvedTy::Bool.pretty_name(&notes.project_tree),
-                        found_type: cond_ty.pretty_name(&notes.project_tree)
+                        expected_type: ResolvedTy::Bool.pretty_name(notes.project_tree),
+                        found_type: cond_ty.pretty_name(notes.project_tree)
                     });
                 }
 
@@ -413,14 +425,14 @@ pub fn resolve_statements(
             }
 
             ast::StatementKind::Repeat(count, body) => {
-                let count_ty = resolve_expr(&count, resolved, stack, notes)?;
+                let count_ty = resolve_expr(count, resolved, stack, notes)?;
 
                 if !count_ty.matches(&ResolvedTy::Number, resolved, notes) {
                     return Err(CompilerError::UnexpectedType {
                         pos: count.pos.clone(),
                         file: notes.current_file.clone(),
-                        expected_type: ResolvedTy::Number.pretty_name(&notes.project_tree),
-                        found_type: count_ty.pretty_name(&notes.project_tree)
+                        expected_type: ResolvedTy::Number.pretty_name(notes.project_tree),
+                        found_type: count_ty.pretty_name(notes.project_tree)
                     });
                 }
 
@@ -433,14 +445,14 @@ pub fn resolve_statements(
             }
 
             ast::StatementKind::While(cond, body) => {
-                let cond_ty = resolve_expr(&cond, resolved, stack, notes)?;
+                let cond_ty = resolve_expr(cond, resolved, stack, notes)?;
 
                 if !cond_ty.matches(&ResolvedTy::Bool, resolved, notes) {
                     return Err(CompilerError::UnexpectedType {
                         pos: cond.pos.clone(),
                         file: notes.current_file.clone(),
-                        expected_type: ResolvedTy::Bool.pretty_name(&notes.project_tree),
-                        found_type: cond_ty.pretty_name(&notes.project_tree)
+                        expected_type: ResolvedTy::Bool.pretty_name(notes.project_tree),
+                        found_type: cond_ty.pretty_name(notes.project_tree)
                     });
                 }
 
@@ -454,7 +466,7 @@ pub fn resolve_statements(
 
             ast::StatementKind::Expr(expr) => {
                 let expr_ty = 
-                    resolve_expr(&expr, resolved, stack, notes)?;
+                    resolve_expr(expr, resolved, stack, notes)?;
                 resolved.types.insert(
                     stmt.id, expr_ty
                 );
@@ -476,15 +488,15 @@ pub fn resolve_statements(
                     ));
                 }
                 let expr_ty = 
-                    resolve_expr(&expr, resolved, stack, notes)?;
+                    resolve_expr(expr, resolved, stack, notes)?;
                 if let Some((block_ty, block_pos)) = &notes.expected_block_ty {
                     if !expr_ty.matches(block_ty, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
                             pos: stmt.pos.clone(),
                             lhs: block_pos.clone(),
-                            lhs_ty: block_ty.pretty_name(&notes.project_tree),
+                            lhs_ty: block_ty.pretty_name(notes.project_tree),
                             rhs: expr.pos.clone(),
-                            rhs_ty: expr_ty.pretty_name(&notes.project_tree),
+                            rhs_ty: expr_ty.pretty_name(notes.project_tree),
                             file: notes.current_file.clone()
                         });
                     }
@@ -496,15 +508,15 @@ pub fn resolve_statements(
             }
             ast::StatementKind::Return(Some(expr)) => {
                 let expr_ty = 
-                    resolve_expr(&expr, resolved, stack, notes)?;
+                    resolve_expr(expr, resolved, stack, notes)?;
                 if let Some((ret_ty, ret_pos)) = &notes.expected_ret_ty {
-                    if !expr_ty.matches(&*ret_ty, resolved, notes) {
+                    if !expr_ty.matches(ret_ty, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
                             pos: stmt.pos.clone(),
                             lhs: ret_pos.clone(),
-                            lhs_ty: ret_ty.pretty_name(&notes.project_tree),
+                            lhs_ty: ret_ty.pretty_name(notes.project_tree),
                             rhs: expr.pos.clone(),
-                            rhs_ty: expr_ty.pretty_name(&notes.project_tree),
+                            rhs_ty: expr_ty.pretty_name(notes.project_tree),
                             file: notes.current_file.clone()
                         });
                     }
@@ -557,16 +569,16 @@ pub fn resolve_expr(
         },
 
         ast::ExpressionKind::Assignment(subject, value) => {
-            let subject_ty = resolve_expr(&subject, resolved, stack, notes)?;
-            let value_ty = resolve_expr(&value, resolved, stack, notes)?;
+            let subject_ty = resolve_expr(subject, resolved, stack, notes)?;
+            let value_ty = resolve_expr(value, resolved, stack, notes)?;
 
             if !value_ty.matches(&subject_ty, resolved, notes) {
                 return Err(CompilerError::MismatchedTypes {
                     pos: expr.pos.clone(),
                     lhs: subject.pos.clone(),
-                    lhs_ty: subject_ty.pretty_name(&notes.project_tree),
+                    lhs_ty: subject_ty.pretty_name(notes.project_tree),
                     rhs: value.pos.clone(),
-                    rhs_ty: value_ty.pretty_name(&notes.project_tree),
+                    rhs_ty: value_ty.pretty_name(notes.project_tree),
                     file: notes.current_file.clone()
                 });
             }
@@ -578,7 +590,7 @@ pub fn resolve_expr(
 
         ast::ExpressionKind::Field(obj, field) => {
             let obj_ty = resolve_expr(
-                &obj,
+                obj,
                 resolved,
                 stack,
                 notes
@@ -599,7 +611,7 @@ pub fn resolve_expr(
                         &[(
                             CodeArea { pos: obj.pos.clone(), file: notes.current_file.clone() },
                             &format!("Expected this to be struct, but got {}.",
-                                ty.pretty_name(&notes.project_tree))
+                                ty.pretty_name(notes.project_tree))
                         )],
                         None
                     )
@@ -635,7 +647,7 @@ pub fn resolve_expr(
         },
 
         ast::ExpressionKind::Call { callee, generics: _generics, arguments } => {
-            let callee_ty = resolve_expr(&callee, resolved, stack, notes)?;
+            let callee_ty = resolve_expr(callee, resolved, stack, notes)?;
 
             let ResolvedTy::Function(callee_args, callee_ret_ty) = 
                 callee_ty.resolve_to_top(resolved) else {
@@ -656,7 +668,7 @@ pub fn resolve_expr(
             
             let mut argument_types = Vec::new();
             for arg in arguments.iter() {
-                argument_types.push(resolve_expr(&arg, resolved, stack, notes)?);
+                argument_types.push(resolve_expr(arg, resolved, stack, notes)?);
             }
 
             if argument_types.len() != callee_args.len() {
@@ -713,7 +725,7 @@ pub fn resolve_expr(
                 return Err(CompilerError::MismatchedTypes {
                     pos: expr.pos.clone(),
                     lhs: notes.items_positions.get(&struct_node).unwrap().clone(),
-                    lhs_ty: resolved.types.get(&struct_node).unwrap().pretty_name(&notes.project_tree),
+                    lhs_ty: resolved.types.get(&struct_node).unwrap().pretty_name(notes.project_tree),
                     rhs: path.pos.clone(),
                     rhs_ty: "Struct Literal".to_string(),
                     file: notes.current_file.clone()
@@ -736,14 +748,14 @@ pub fn resolve_expr(
                     });
                 };
 
-                if !field_ty.matches(&*field_expected_ty, resolved, notes) {
+                if !field_ty.matches(field_expected_ty, resolved, notes) {
                     return Err(CompilerError::MismatchedTypes {
                         pos: expr.pos.clone(),
                         lhs: notes.struct_field_positions.get(&struct_node).unwrap()
                             .get(&field.name).unwrap().clone(),
-                        lhs_ty: field_expected_ty.pretty_name(&notes.project_tree),
+                        lhs_ty: field_expected_ty.pretty_name(notes.project_tree),
                         rhs: field.pos.clone(),
-                        rhs_ty: field_ty.pretty_name(&notes.project_tree),
+                        rhs_ty: field_ty.pretty_name(notes.project_tree),
                         file: notes.current_file.clone()
                     });
                 }
@@ -768,7 +780,7 @@ pub fn resolve_expr(
         },
 
         ast::ExpressionKind::Unary(op, subexpr) => {
-            let expr_ty = resolve_expr(&subexpr, resolved, stack, notes)?;
+            let expr_ty = resolve_expr(subexpr, resolved, stack, notes)?;
             let ty = match op {
                 ast::UnaryOp::Neg => {
                     if expr_ty != ResolvedTy::Number {
@@ -813,8 +825,8 @@ pub fn resolve_expr(
         }
 
         ast::ExpressionKind::Binary(a, op, b) => {
-            let a_ty = resolve_expr(&a, resolved, stack, notes)?;
-            let b_ty = resolve_expr(&b, resolved, stack, notes)?;
+            let a_ty = resolve_expr(a, resolved, stack, notes)?;
+            let b_ty = resolve_expr(b, resolved, stack, notes)?;
 
             fn expect_two_numbers(
                 expr: &ast::Expression,
@@ -829,7 +841,7 @@ pub fn resolve_expr(
                     return Err(CompilerError::MismatchedTypes {
                         pos: expr.pos.clone(),
                         lhs: a.pos.clone(),
-                        lhs_ty: a_ty.pretty_name(&notes.project_tree),
+                        lhs_ty: a_ty.pretty_name(notes.project_tree),
                         rhs: expr.pos.clone(),
                         rhs_ty: "This expression requires both values to be a number.".to_string(),
                         file: notes.current_file.clone()
@@ -841,7 +853,7 @@ pub fn resolve_expr(
                         lhs: expr.pos.clone(),
                         lhs_ty: "This expression requires both values to be a number.".to_string(),
                         rhs: b.pos.clone(),
-                        rhs_ty: b_ty.pretty_name(&notes.project_tree),
+                        rhs_ty: b_ty.pretty_name(notes.project_tree),
                         file: notes.current_file.clone()
                     });
                 }
@@ -854,9 +866,9 @@ pub fn resolve_expr(
                         return Err(CompilerError::MismatchedTypes {
                             pos: expr.pos.clone(),
                             lhs: a.pos.clone(),
-                            lhs_ty: a_ty.pretty_name(&notes.project_tree),
+                            lhs_ty: a_ty.pretty_name(notes.project_tree),
                             rhs: b.pos.clone(),
-                            rhs_ty: b_ty.pretty_name(&notes.project_tree),
+                            rhs_ty: b_ty.pretty_name(notes.project_tree),
                             file: notes.current_file.clone()
                         });
                     }
@@ -892,7 +904,7 @@ pub fn resolve_expr(
                                             CodeArea { pos: b.pos.clone(), file: notes.current_file.clone() },
                                             &format!(
                                                 "'+' operator expects this to be text/number/boolean but got {}.",
-                                                b_ty.pretty_name(&notes.project_tree)
+                                                b_ty.pretty_name(notes.project_tree)
                                             ),
                                         )],
                                         None
@@ -911,7 +923,7 @@ pub fn resolve_expr(
                         return Err(CompilerError::MismatchedTypes {
                             pos: expr.pos.clone(),
                             lhs: a.pos.clone(),
-                            lhs_ty: a_ty.pretty_name(&notes.project_tree),
+                            lhs_ty: a_ty.pretty_name(notes.project_tree),
                             rhs: expr.pos.clone(),
                             rhs_ty: "This expression requires both values to be a boolean.".to_string(),
                             file: notes.current_file.clone()
@@ -923,7 +935,7 @@ pub fn resolve_expr(
                             lhs: expr.pos.clone(),
                             lhs_ty: "This expression requires both values to be a boolean.".to_string(),
                             rhs: b.pos.clone(),
-                            rhs_ty: b_ty.pretty_name(&notes.project_tree),
+                            rhs_ty: b_ty.pretty_name(notes.project_tree),
                             file: notes.current_file.clone()
                         });
                     }
@@ -948,7 +960,7 @@ fn resolve_ty(
     ResolvedTy::from_ast_ty(
         ty,
         &notes.current_path,
-        &notes.project_tree,
+        notes.project_tree,
         &notes.current_file,
     )
 }

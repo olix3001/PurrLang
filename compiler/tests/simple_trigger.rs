@@ -1,4 +1,4 @@
-use codegen::{build_project_json, DataId};
+use codegen::{DataId};
 use common::PurrSource;
 use compiler::compile_purr;
 use parser::parser::parse_purr;
@@ -25,7 +25,7 @@ fn compile_empty_green_flag() {
     assert_eq!(code.blocks.len(), 1);
     let first_block = code.blocks.values().next().unwrap();
     assert_eq!(first_block.opcode, "event_whenflagclicked");
-    assert_eq!(first_block.top_level, true);
+    assert!(first_block.top_level);
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn compile_hello_world() {
     assert_eq!(code.blocks.len(), 2);
     let first_block = code.blocks.get(&DataId::from_numeric_id(0)).unwrap();
     assert_eq!(first_block.opcode, "event_whenflagclicked");
-    assert_eq!(first_block.top_level, true);
+    assert!(first_block.top_level);
 
     let second_block = code.blocks.get(&DataId::from_numeric_id(1)).unwrap();
     assert_eq!(second_block.opcode, "looks_say");

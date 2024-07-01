@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use error::CompilerError;
-use parser::ast::{self, NodeId, PurrPath};
+use parser::ast::{self, NodeId};
 use petgraph::{algo::dijkstra, data::Build, graph::{DiGraph, NodeIndex}, visit::NodeRef};
 use resolution::{project_tree::{ProjectTree, ResolutionPath}, resolve::ResolvedData, ResolvedTy};
 
@@ -17,7 +17,7 @@ pub(crate) fn build_usage_graph(
     node_ids.insert(root_id, ix);
 
     add_items_to_graph(ast, resolved, &mut graph, node_ids)?;
-    find_usages(ast, resolved, project_tree, &mut graph, root_id, &node_ids)?;
+    find_usages(ast, resolved, project_tree, &mut graph, root_id, node_ids)?;
 
     Ok((root_id, graph))
 }
@@ -53,8 +53,8 @@ pub(crate) fn find_usages(
             ast::ItemKind::Import(_) |
             ast::ItemKind::StructDefinition(_) => {
                 graph.update_edge(
-                    (*node_ids.get(&current_id).unwrap()).into(),
-                    (*node_ids.get(&item.id).unwrap()).into(),
+                    *node_ids.get(&current_id).unwrap(),
+                    *node_ids.get(&item.id).unwrap(),
                     ()
                 );
             }
@@ -107,8 +107,8 @@ fn find_import_tree_usages(
         if let Some(current_st) = current.subtrees.get(seg) {
             let id = current.names.get(seg).unwrap();
             graph.update_edge(
-                (*node_ids.get(&current_id).unwrap()).into(),
-                (*node_ids.get(id).unwrap()).into(),
+                *node_ids.get(&current_id).unwrap(),
+                *node_ids.get(id).unwrap(),
                 ()
             );
 
@@ -148,11 +148,11 @@ pub(crate) fn find_usages_in_statements(
             ast::StatementKind::Expr(expr) |
             ast::StatementKind::ExprNoSemi(expr) |
             ast::StatementKind::Return(Some(expr)) => {
-                find_usages_in_expression(&expr, resolved, project_tree, graph, current_id, node_ids)?;
+                find_usages_in_expression(expr, resolved, project_tree, graph, current_id, node_ids)?;
             }
 
             ast::StatementKind::Conditional(cond, if_true, if_false) => {
-                find_usages_in_expression(&cond, resolved, project_tree, graph, current_id, node_ids)?;
+                find_usages_in_expression(cond, resolved, project_tree, graph, current_id, node_ids)?;
                 find_usages_in_statements(if_true, resolved, project_tree, graph, current_id, node_ids)?;
                 if let Some(if_false) = &if_false {
                     find_usages_in_statements(if_false, resolved, project_tree, graph, current_id, node_ids)?;
@@ -161,7 +161,7 @@ pub(crate) fn find_usages_in_statements(
 
             ast::StatementKind::Repeat(cc, body) |
             ast::StatementKind::While(cc, body) => {
-                find_usages_in_expression(&cc, resolved, project_tree, graph, current_id, node_ids)?;
+                find_usages_in_expression(cc, resolved, project_tree, graph, current_id, node_ids)?;
                 find_usages_in_statements(body, resolved, project_tree, graph, current_id, node_ids)?;
             }
 
@@ -189,8 +189,8 @@ pub(crate) fn find_usages_in_expression(
         ast::ExpressionKind::Path(_) => {
             if let Some(ResolvedTy::Path(id)) = resolved.types.get(&expr.id) {
                 graph.update_edge(
-                    (*node_ids.get(&current_id).unwrap()).into(),
-                    (*node_ids.get(id).unwrap()).into(),
+                    *node_ids.get(&current_id).unwrap(),
+                    *node_ids.get(id).unwrap(),
                     ()
                 );
             }
@@ -234,7 +234,7 @@ pub(crate) fn find_unused_nodes(
 ) -> HashSet<NodeId> {
     let result = dijkstra(
         graph,
-        (*node_ids.get(&root_id).unwrap()).into(),
+        *node_ids.get(&root_id).unwrap(),
         None,
         |_| 1
     );

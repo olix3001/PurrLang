@@ -1,4 +1,4 @@
-use codegen::{build_project_json, DataId};
+use codegen::{DataId};
 use common::PurrSource;
 use compiler::compile_purr;
 use parser::parser::parse_purr;
@@ -34,7 +34,7 @@ fn compile_single_variable() {
 
     let first_block = code.blocks.get(&DataId::from_numeric_id(0)).unwrap();
     assert_eq!(first_block.opcode, "event_whenflagclicked");
-    assert_eq!(first_block.top_level, true);
+    assert!(first_block.top_level);
 
     let second_block = code.blocks.get(&DataId::from_numeric_id(2)).unwrap();
     assert_eq!(second_block.opcode, "data_setvariableto");

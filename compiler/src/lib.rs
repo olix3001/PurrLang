@@ -75,8 +75,8 @@ pub fn compile_items_prepass(
                 let mut function_args = Vec::new();
                 for arg in definition.signature.arguments.iter() {
                     let ty = notes.resolved_data.types.get(&arg.id).unwrap();
-                    let size = ty.size(&notes.resolved_data);
-                    let flat_ty = ty.flatten(&notes.resolved_data);
+                    let size = ty.size(notes.resolved_data);
+                    let flat_ty = ty.flatten(notes.resolved_data);
 
                     for i in 0..size {
                         function_args.push((
@@ -115,8 +115,8 @@ pub fn compile_items_prepass(
                     current_args.insert(
                         arg.id,
                         Value::from_flat_and_ty(
-                            &ty, &mut argument_flat_iter,
-                            &notes.resolved_data
+                            ty, &mut argument_flat_iter,
+                            notes.resolved_data
                         )
                     );
                 }
@@ -209,7 +209,7 @@ fn get_function_arguments(
     let ResolvedTy::Function(args, _) = ty 
         else { unreachable!("There is error in the compiler?") };
     for arg in args.iter() {
-        for _ in 0..arg.size(&notes.resolved_data) {
+        for _ in 0..arg.size(notes.resolved_data) {
             let id = DataId::new();
             ids.push(id);
         }
@@ -299,7 +299,7 @@ pub fn compile_statements(
                 
                 write_variable(
                     &notes.proc_returns.get(&current_proc).unwrap().clone(),
-                    compile_expr(&expr, builder, notes)?,
+                    compile_expr(expr, builder, notes)?,
                     builder,
                     notes
                 )?;
@@ -310,7 +310,7 @@ pub fn compile_statements(
                     else { panic!("Temporary error: return with value may only be used in procedures.") }; 
                     write_variable(
                         &notes.proc_returns.get(&current_proc).unwrap().clone(),
-                        compile_expr(&value, builder, notes)?,
+                        compile_expr(value, builder, notes)?,
                         builder,
                         notes
                     )?;
@@ -333,18 +333,18 @@ pub fn compile_statements(
                     else { "control_if" }
                 );
 
-                let condition = compile_expr(&condition, builder, notes)?;
+                let condition = compile_expr(condition, builder, notes)?;
                 b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
 
                 let mut substack_builder = builder.subbuilder_for(b.id());
-                compile_statements(&if_true, &mut substack_builder, notes)?;
+                compile_statements(if_true, &mut substack_builder, notes)?;
                 if let Some(first) = substack_builder.first() {
                     b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
                 }
 
                 if let Some(if_false) = &if_false {
                     let mut substack_builder = builder.subbuilder_for(b.id());
-                    compile_statements(&if_false, &mut substack_builder, notes)?;
+                    compile_statements(if_false, &mut substack_builder, notes)?;
                     if let Some(first) = substack_builder.first() {
                         b.input("SUBSTACK2", &[Sb3Value::Ptr(first)]);
                     }
@@ -354,11 +354,11 @@ pub fn compile_statements(
             ast::StatementKind::Repeat(count, body) => {
                 let mut b = builder.block("control_repeat");
 
-                let count = compile_expr(&count, builder, notes)?;
+                let count = compile_expr(count, builder, notes)?;
                 b.input("TIMES", &[count.into_sb3(builder, b.id())?]);
 
                 let mut substack_builder = builder.subbuilder_for(b.id());
-                compile_statements(&body, &mut substack_builder, notes)?;
+                compile_statements(body, &mut substack_builder, notes)?;
                 if let Some(first) = substack_builder.first() {
                     b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
                 }
@@ -367,7 +367,7 @@ pub fn compile_statements(
             ast::StatementKind::While(condition, body) => {
                 let mut b = builder.block("control_repeat_until");
 
-                let condition = compile_expr(&condition, builder, notes)?;
+                let condition = compile_expr(condition, builder, notes)?;
                 // Repeat until works opposite to a while for some reason.
                 let condition = {
                     let mut b = builder.block("operator_not");
@@ -378,7 +378,7 @@ pub fn compile_statements(
                 b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
 
                 let mut substack_builder = builder.subbuilder_for(b.id());
-                compile_statements(&body, &mut substack_builder, notes)?;
+                compile_statements(body, &mut substack_builder, notes)?;
                 if let Some(first) = substack_builder.first() {
                     b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
                 }
@@ -453,7 +453,7 @@ fn define_variables_for_type(
     builder: &mut BlocksBuilder,
     notes: &mut CompileNotes
 ) -> Result<Value, CompilerError> {
-    let ty = ty.resolve_to_top(&notes.resolved_data);
+    let ty = ty.resolve_to_top(notes.resolved_data);
     match ty {
         ResolvedTy::Text | ResolvedTy::Number | ResolvedTy::Bool => {
             let id = builder.define_variable(
@@ -468,7 +468,7 @@ fn define_variables_for_type(
                 let value = define_variables_for_type(
                     &format!("{prefix}.{field_name}"),
                     node_id,
-                    &field_value,
+                    field_value,
                     builder,
                     notes
                 )?; 
@@ -532,15 +532,15 @@ pub fn compile_expr(
         }
 
         ast::ExpressionKind::Assignment(subject, value) => {
-            let subject_value = compile_expr(&subject, builder, notes)?;
-            let value_value = compile_expr(&value, builder, notes)?;
+            let subject_value = compile_expr(subject, builder, notes)?;
+            let value_value = compile_expr(value, builder, notes)?;
 
             write_variable(&subject_value, value_value, builder, notes)?;
             Ok(subject_value)
         }
 
         ast::ExpressionKind::Field(obj, field) => {
-            let obj = compile_expr(&*obj, builder, notes)?;
+            let obj = compile_expr(obj, builder, notes)?;
             let Value::Struct(obj) = obj else {
                 panic!("Field access is only allowed on structs");
             };
@@ -598,7 +598,7 @@ pub fn compile_expr(
                     write_variable(&call_vars, proc_ret, builder, notes)?;
                     Ok(call_vars)
                 },
-                _ => return Err(CompilerError::Custom(
+                _ => Err(CompilerError::Custom(
                     create_error(
                         error::info::ErrorInfo::from_area(CodeArea {
                             pos: callee.pos.clone(), file: notes.current_file.clone()
@@ -644,8 +644,8 @@ pub fn compile_expr(
         }
 
         ast::ExpressionKind::Binary(a, op, b) => {
-            let ac = compile_expr(&a, builder, notes)?;
-            let bc = compile_expr(&b, builder, notes)?;
+            let ac = compile_expr(a, builder, notes)?;
+            let bc = compile_expr(b, builder, notes)?;
 
             match op {
                 ast::BinaryOp::Lt | ast::BinaryOp::Le | 
@@ -738,7 +738,7 @@ fn deep_equals(
             let a = a.flatten();
             let b = b.flatten();
 
-            a.into_iter().zip(b.into_iter()).try_fold(Value::Empty, |acc, (a, b)| {
+            a.into_iter().zip(b).try_fold(Value::Empty, |acc, (a, b)| {
                 let mut cmp = builder.block("operator_equals");
                 cmp.input("OPERAND1", &[a.into_sb3(builder, cmp.id())?]);
                 cmp.input("OPERAND2", &[b.into_sb3(builder, cmp.id())?]);

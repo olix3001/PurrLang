@@ -207,7 +207,7 @@ pub fn create_error_report(rep: ErrorReport) -> ariadne::Report<'static, CodeAre
     for (i, (area, label)) in rep.labels.iter().enumerate() {
         report = report.with_label(
             Label::new(area.clone())
-                .with_message(&format!("{}: {}", i.to_string(), label))
+                .with_message(&format!("{}: {}", i, label))
                 .with_order(i as _)
                 .with_priority(2)
         )

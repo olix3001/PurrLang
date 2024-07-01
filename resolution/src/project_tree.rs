@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use ahash::{HashMap, HashSet, HashSetExt};
+use ahash::{HashMap};
 
 use common::Libraries;
-use parser::ast::{self, NodeId};
+use parser::ast::{self};
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ResolutionPath {
@@ -75,9 +75,9 @@ impl ProjectTree {
                 ast::ItemKind::Import(import) => {
                     let fs = import.prefix.segments.first().unwrap();
                     if libs.libs.contains_key(&fs.ident) {
-                        tree.resolve_import_tree(&Default::default(), &import)
+                        tree.resolve_import_tree(&Default::default(), import)
                     } else {
-                        tree.resolve_import_tree(&prefix, &import)
+                        tree.resolve_import_tree(&prefix, import)
                     }
                 }
 

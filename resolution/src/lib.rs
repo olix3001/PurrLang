@@ -55,7 +55,7 @@ impl ResolvedTy {
                 }
 
                 if let Some(current) = tree.resolve_tree(current) {
-                    if path.segments.len() < 1 {
+                    if path.segments.is_empty() {
                         return Err(CompilerError::UnknownPath {
                             path: path.segments,
                             pos: path_span,
@@ -105,7 +105,7 @@ impl ResolvedTy {
 
                 Ok(ResolvedTy::Function(
                     args_,
-                    Box::new(ResolvedTy::from_ast_ty(&ret, current, tree, file)?)
+                    Box::new(ResolvedTy::from_ast_ty(ret, current, tree, file)?)
                 ))
             }
         }

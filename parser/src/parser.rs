@@ -874,8 +874,8 @@ pub fn parse_ty_struct(
 }
 
 pub fn parse_optional_generics(
-    tokens: &mut Tokens,
-    notes: &mut ParseNotes
+    _tokens: &mut Tokens,
+    _notes: &mut ParseNotes
 ) -> Result<Vec<ast::TypeVariable>, SyntaxError> {
     Ok(Vec::new()) // Not implemented.
     // if !tokens.check(Token::Lt) { return Ok(Vec::new()); }
@@ -906,11 +906,9 @@ pub fn parse_attributes(
             Some(Token::Hash) => {
                 // If we're expecting top level attributes
                 // expect additional bang symbol.
-                if is_top_level {
-                    if tokens.next() != Some(Token::Bang) {
-                        tokens.back();
-                        return Ok(attributes);
-                    }
+                if is_top_level && tokens.next() != Some(Token::Bang) {
+                    tokens.back();
+                    return Ok(attributes);
                 }
 
                 expect(tokens, notes, Token::LSquare)?;
@@ -1013,8 +1011,8 @@ pub fn parse_path(
 }
 
 fn parse_optional_generic_args(
-    tokens: &mut Tokens,
-    notes: &mut ParseNotes
+    _tokens: &mut Tokens,
+    _notes: &mut ParseNotes
 ) -> Result<Option<ast::GenericArgs>, SyntaxError> {
     Ok(None) // This is not implemented
     // if tokens.check(Token::Lt) {
@@ -1080,10 +1078,10 @@ fn parse_import(
     let subimports = separated(tokens, notes, Token::Comma, parse_import)?;
     expect(tokens, notes, Token::RCurly)?;
 
-    return Ok(ast::ImportTree {
+    Ok(ast::ImportTree {
         prefix,
         kind: ast::ImportKind::Nested(subimports)
-    });
+    })
 }
 
 fn parse_signature(

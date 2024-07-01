@@ -228,6 +228,12 @@ pub struct Sb3FunctionDefinition {
     pub proccode: String
 }
 
+impl Default for BlocksBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BlocksBuilder {
     pub fn new() -> Self {
         Self {

@@ -53,12 +53,12 @@ pub fn build_project(args: BuildCommand) {
                 "Error".bold().bright_red(),
                 "Catnip.toml is not a valid project file.".bold()
             );
-            eprintln!("{}", err.to_string());
+            eprintln!("{}", err);
             return;
         }
     };
 
-    build_(&args, &path.as_path(), &project, &mut zip);
+    build_(&args, path.as_path(), &project, &mut zip);
     zip.finish().unwrap();
 
     println!(
@@ -69,7 +69,7 @@ pub fn build_project(args: BuildCommand) {
 }
 
 fn build_(
-    args: &BuildCommand,
+    _args: &BuildCommand,
     project_dir: &Path,
     project: &Project,
     zip: &mut ZipWriter<BufWriter<fs::File>>
@@ -83,7 +83,7 @@ fn build_(
     for (sprite_name, sprite) in project.sprites.iter() {
         let is_stage = sprite_name == "Stage";
         let mut scratch_sprite = Target {
-            is_stage: if is_stage { true } else { false },
+            is_stage,
             name: sprite_name.clone(),
             x: sprite.position.x,
             y: sprite.position.y,
@@ -102,7 +102,7 @@ fn build_(
             ..Default::default()
         };
 
-        if sprite.costumes.len() == 0 {
+        if sprite.costumes.is_empty() {
             eprintln!(
                 "{}: {} {} {}",
                 "Error".bold().bright_red(),
@@ -156,7 +156,7 @@ fn build_(
     }
 
     // Build project.json
-    zip.start_file("project.json", ZIP_OPTIONS.clone()).unwrap();
+    zip.start_file("project.json", *ZIP_OPTIONS).unwrap();
     let project_json = serde_json::to_vec(&scratch).unwrap();
     zip.write_all(&project_json).unwrap();
 }
@@ -183,7 +183,7 @@ fn project_costume_to_scratch_costume(
 
     let file_name = format!("{}.{}", hash, costume.src.extension().unwrap().to_str().unwrap());
 
-    zip.start_file(file_name.clone(), ZIP_OPTIONS.clone()).unwrap();
+    zip.start_file(file_name.clone(), *ZIP_OPTIONS).unwrap();
     zip.write_all(&file).unwrap();
 
     let scratch_costume = ScratchCostume {
@@ -355,28 +355,26 @@ fn inline_file_modules(
                 pos: 0..0,
                 attributes: mod_ast.1.attributes
             });
-        } else {
-            if path.join("mod.purr").exists() {
-                let mod_path = path.join("mod.purr");
-                let mod_name = path.file_name().unwrap().to_str().unwrap().to_string();
-                let src = fs::read_to_string(&mod_path).unwrap();
-                let source = PurrSource::File(mod_path.clone());
-                let mod_ast = parse_purr(src, source.clone())?;
-                let mut definition = ast::ModuleDefinition {
-                    name: mod_name,
-                    body: mod_ast.0,
-                    source
-                };
+        } else if path.join("mod.purr").exists() {
+            let mod_path = path.join("mod.purr");
+            let mod_name = path.file_name().unwrap().to_str().unwrap().to_string();
+            let src = fs::read_to_string(&mod_path).unwrap();
+            let source = PurrSource::File(mod_path.clone());
+            let mod_ast = parse_purr(src, source.clone())?;
+            let mut definition = ast::ModuleDefinition {
+                name: mod_name,
+                body: mod_ast.0,
+                source
+            };
 
-                inline_file_modules(&mod_path, &mut definition.body)?;
+            inline_file_modules(&mod_path, &mut definition.body)?;
 
-                ast.push(ast::Item {
-                    kind: ast::ItemKind::Module(definition) ,
-                    id: NodeId::next(),
-                    pos: 0..0,
-                    attributes: mod_ast.1.attributes
-                });
-            }
+            ast.push(ast::Item {
+                kind: ast::ItemKind::Module(definition) ,
+                id: NodeId::next(),
+                pos: 0..0,
+                attributes: mod_ast.1.attributes
+            });
         }
     }
     Ok(())
