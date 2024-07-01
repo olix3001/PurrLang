@@ -1,4 +1,4 @@
-use std::{env::current_dir, fs, io::{BufWriter, Write}, path::{Path, PathBuf}, rc::Rc};
+use std::{env::{current_dir, current_exe}, fs, io::{BufWriter, Write}, path::{Path, PathBuf}, rc::Rc};
 
 use codegen::blocks::Sb3Code;
 use colored::Colorize;
@@ -227,11 +227,16 @@ fn build_file(
     };
 
     let mut libs = common::Libraries::default();
-    std::env::set_var("PURR_PATH", "/Users/olix3001/Documents/Projekty/PurrLang/");
-    let purr_path = std::env::var("PURR_PATH").unwrap();
+    let purr_path = std::env::var("PURR_PATH").unwrap_or(
+        current_exe().unwrap().join("../../../")
+        .canonicalize().unwrap().to_str().unwrap().to_string()
+    );
     let purr_path = PathBuf::from(purr_path);
     libs.register("scratch", PurrLib {
         path: purr_path.join("libraries/scratch")
+    });
+    libs.register("std", PurrLib {
+        path: purr_path.join("libraries/std")
     });
     let libs = Rc::new(libs);
 

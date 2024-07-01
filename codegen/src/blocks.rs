@@ -203,14 +203,15 @@ impl Serialize for Sb3Value {
 #[derive(Default)]
 struct InnerBuilderData {
     previous: Option<DataId>,
-    first: Option<DataId>
+    first: Option<DataId>,
+
+    start_x: i32,
+    start_y: i32,
 }
 
 #[derive(Clone)]
 pub struct BlocksBuilder {
     code: Rc<RefCell<Sb3Code>>,
-    start_x: i32,
-    start_y: i32,
     data: Rc<RefCell<InnerBuilderData>>
 }
 
@@ -233,8 +234,6 @@ impl BlocksBuilder {
             code: Rc::new(RefCell::new(
                 Sb3Code::default()
             )),
-            start_x: 0,
-            start_y: 0,
             data: Rc::new(RefCell::new(
                 InnerBuilderData::default()
             ))
@@ -318,9 +317,6 @@ impl BlocksBuilder {
             if let Some(parent_block) = code.blocks.get_mut(parent) {
                 parent_block.next = Some(id.clone());
             }
-        } else {
-            block.x = Some(self.start_x);
-            block.y = Some(self.start_y);
         }
 
         if self.data.borrow().first.is_none() {
@@ -341,13 +337,13 @@ impl BlocksBuilder {
         argument_ids: &[DataId],
         warp: bool
     ) -> (Self, Sb3FunctionDefinition) {
-        let mut subbuilder = Self::new();
-        subbuilder.code = self.code.clone();
         let mut definition = Sb3FunctionDefinition::default();
         definition.warp = warp;
 
-        let mut proc_definition = subbuilder.block("procedures_definition");
+        let mut proc_definition = self.block("procedures_definition");
         proc_definition.top_level();
+        let mut subbuilder = self.subbuilder_for(proc_definition.id());
+        subbuilder.code = self.code.clone();
         let mut proc_proto = subbuilder.block("procedures_prototype");
         proc_proto.shadow().parent(proc_definition.id.clone());
 
@@ -405,6 +401,7 @@ impl BlocksBuilder {
         let id = proc_definition.finish();
 
         subbuilder.data.borrow_mut().previous = Some(id);
+        self.reset_previous();
 
         (subbuilder, definition)
     }
@@ -437,7 +434,14 @@ impl BlockBuilder {
     pub fn id(&self) -> &DataId { &self.id }
 
     pub fn top_level(&mut self) -> &mut Self {
-        self.block.as_mut().unwrap().top_level = true;
+        let block = self.block.as_mut().unwrap();
+        block.top_level = true;
+        {
+            let mut data = self.builder.data.borrow_mut();
+            block.x = Some(data.start_x);
+            data.start_x += 400;
+            block.y = Some(data.start_y);
+        }
         self
     }
 
