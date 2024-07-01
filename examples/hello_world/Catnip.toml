@@ -1,0 +1,28 @@
+[project]
+extensions = ["pen"] # This is not used in this project, but is there as an example.
+
+[sprites.Cat]
+costume = "cat1"
+entry = "cat.purr"
+# ==< OPTIONAL START >==
+position = { x = 0, y = 0 }
+volume = 100
+size = 100
+direction = 90
+visible = true
+rotationStyle = "all around"
+layer = 1
+draggable = false
+# ==< OPTIONAL END >==
+
+[[sprites.Cat.costumes]]
+name = "cat1"
+src = "cat1.svg"
+
+# Backdrop MUST be defined.
+[sprites.Stage]
+costume = "backdrop1"
+
+[[sprites.Stage.costumes]]
+name = "backdrop1"
+src = "backdrop.svg"

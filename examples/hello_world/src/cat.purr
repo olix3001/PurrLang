@@ -1,0 +1,7 @@
+import scratch::looks::say;
+import std::io::ask;
+
+@green_flag {
+  let name = ask("What's your name?");
+  say("Hello, "+ name + "!");
+}

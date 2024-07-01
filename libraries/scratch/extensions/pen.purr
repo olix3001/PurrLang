@@ -1,0 +1,16 @@
+block clear_pen() pen_clear {}
+block stamp() pen_stamp {}
+block pen_down() pen_penDown {}
+block pen_up() pen_penUp {}
+
+block set_pen_color(COLOR: text) pen_setPenColorToColor {
+  inputs: .{ COLOR }
+}
+
+block change_pen_size_by(SIZE: number) pen_changePenSizeBy {
+  inputs: .{ SIZE }
+}
+
+block set_pen_size(SIZE: number) pen_setPenSizeTo {
+  inputs: .{ SIZE }
+}

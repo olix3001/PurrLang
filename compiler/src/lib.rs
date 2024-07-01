@@ -236,7 +236,6 @@ pub fn compile_trigger(
         "sprite_clicked" => "event_whenthisspriteclicked",
         "backdrop_switch" => "event_whenbackdropswitchesto",
 
-
         _ => return Err(CompilerError::Custom(
             create_error(
                 error::info::ErrorInfo::from_area(CodeArea {
