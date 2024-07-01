@@ -1,0 +1,73 @@
+block round(NUM: number) -> number operator_round {
+  inputs: .{ NUM }
+}
+
+block abs(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "abs" }
+}
+
+block floor(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "floor" }
+}
+
+block ceiling(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "ceiling" }
+}
+
+block sqrt(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "sqrt" }
+}
+
+block sin(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "sin" }
+}
+
+block cos(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "cos" }
+}
+
+block tan(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "tan" }
+}
+
+block asin(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "asin" }
+}
+
+block acos(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "acos" }
+}
+
+block atan(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "atan" }
+}
+
+block ln(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "ln" }
+}
+
+block log10(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "log" }
+}
+
+block powe(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "e ^" }
+}
+
+block pow10(NUM: number) -> number operator_mathop {
+  inputs: .{ NUM },
+  fields: .{ OPERATOR: "10 ^" }
+}

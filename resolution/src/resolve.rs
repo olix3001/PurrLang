@@ -304,6 +304,10 @@ pub fn resolve_item_statements(
             },
 
             ast::ItemKind::Trigger(trigger) => {
+                for argument in trigger.arguments.iter() {
+                    resolve_expr(&argument, resolved, &mut Stack::new(), notes)?;
+                }
+
                 notes.expected_ret_ty = Some((
                     ResolvedTy::Void,
                     item.pos.clone()

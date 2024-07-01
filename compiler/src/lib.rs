@@ -227,6 +227,10 @@ pub fn compile_trigger(
 ) -> Result<DataId, CompilerError> {
     let opcode = match trigger.name.as_str() {
         "green_flag" => "event_whenflagclicked",
+        "key_pressed" => "event_whenkeypressed",
+        "sprite_clicked" => "event_whenthisspriteclicked",
+        "backdrop_switch" => "event_whenbackdropswitchesto",
+
 
         _ => return Err(CompilerError::Custom(
             create_error(
@@ -244,9 +248,31 @@ pub fn compile_trigger(
     };
     let mut block = builder.block(opcode);
     block.top_level();
-    let block = block.finish();
 
-    compile_statements(&trigger.body, builder, notes)?;
+    match trigger.name.as_str() {
+        "key_pressed" => {
+            let ast::ExpressionKind::String(key) = &trigger.arguments.first().unwrap().kind
+                else { panic!("Expected string literal for key in @key_pressed. ")};
+            block.field("KEY_OPTION", Sb3Field::Argument(key.to_string()));
+        }
+        "backdrop_switch" => {
+            let ast::ExpressionKind::String(bd) = &trigger.arguments.first().unwrap().kind
+                else { panic!("Expected string literal for key in @backdrop_switch. ")};
+            block.field("BACKDROP", Sb3Field::Argument(bd.to_string()));
+        }
+        _ => {}
+    }
+
+    let mut subbuilder = builder.subbuilder_for(block.id());
+    compile_statements(&trigger.body, &mut subbuilder, notes)?;
+
+    {
+        let block = block.block.as_mut().unwrap();
+        block.next = subbuilder.first();
+    }
+
+    let block = block.finish();
+    builder.reset_previous();
 
     Ok(block)
 }

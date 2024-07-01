@@ -263,6 +263,11 @@ impl BlocksBuilder {
         data.previous = Some(previous);
     }
 
+    pub fn reset_previous(&mut self) {
+        let mut data = self.data.borrow_mut();
+        data.previous = None;
+    }
+
     pub fn previous(&self) -> DataId {
         self.data.borrow().previous.as_ref().unwrap().clone()
     }
