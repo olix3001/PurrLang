@@ -1,0 +1,7 @@
+import scratch::sensing::{ask_and_wait, get_answer};
+
+def ask(question: text) -> text {
+  ask_and_wait(question);
+  get_answer()
+}
+

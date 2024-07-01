@@ -142,12 +142,15 @@ pub fn resolve_tl_types(
                     .join(&[module.name.as_str()].as_slice().into());
                 let ast_temp = notes.ast;
                 notes.ast = &module.body;
+                let file_temp = notes.current_file.clone();
+                notes.current_file = module.source.clone();
                 resolve_tl_types(
                     resolved,
                     notes
                 )?;
                 notes.current_path = path_temp;
                 notes.ast = ast_temp;
+                notes.current_file = file_temp;
             },
             ast::ItemKind::BlockDefinition(block) => {
                 let ty = signature_to_resolved_ty(&block.signature, resolved, notes)?;
@@ -208,12 +211,15 @@ pub fn resolve_item_statements(
                     .join(&[module.name.as_str()].as_slice().into());
                 let ast_temp = notes.ast;
                 notes.ast = &module.body;
+                let file_temp = notes.current_file.clone();
+                notes.current_file = module.source.clone();
                 resolve_item_statements(
                     resolved,
                     notes
                 )?;
                 notes.current_path = path_temp;
                 notes.ast = ast_temp;
+                notes.current_file = file_temp;
             },
 
             ast::ItemKind::BlockDefinition(block) => {

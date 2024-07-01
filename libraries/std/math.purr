@@ -1,0 +1,19 @@
+import scratch::math::floor;
+
+// Fast exponentiation.
+def powi(b: number, e: number) -> number {
+  let b = b;
+  let e = e;
+  let t = 1;
+
+  while e > 0 -> {
+    if e % 2 != 0 -> {
+      t = (t*b) % 100000000003;
+    }
+
+    b = (b*b) % 100000000003;
+    e = floor(e/2);
+  }
+
+  t%100000000003
+}

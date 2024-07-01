@@ -203,7 +203,6 @@ impl Serialize for Sb3Value {
 #[derive(Default)]
 struct InnerBuilderData {
     previous: Option<DataId>,
-    first: Option<DataId>,
 
     start_x: i32,
     start_y: i32,
@@ -212,7 +211,8 @@ struct InnerBuilderData {
 #[derive(Clone)]
 pub struct BlocksBuilder {
     code: Rc<RefCell<Sb3Code>>,
-    data: Rc<RefCell<InnerBuilderData>>
+    data: Rc<RefCell<InnerBuilderData>>,
+    first: Option<DataId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -236,7 +236,8 @@ impl BlocksBuilder {
             )),
             data: Rc::new(RefCell::new(
                 InnerBuilderData::default()
-            ))
+            )),
+            first: None
         }
     }
 
@@ -250,14 +251,20 @@ impl BlocksBuilder {
         self.code.borrow_mut()
     }
 
+    pub fn set_first(
+        &mut self,
+        first: DataId
+    ) {
+        self.first = Some(first);
+    }
+
     pub fn set_previous(
         &mut self,
         previous: DataId
     ) {
         let mut data = self.data.borrow_mut();
-        let current_prev = data.previous.as_ref();
-        if data.first.as_ref() == current_prev {
-            data.first = Some(previous.clone());
+        if self.first == data.previous || self.first.is_none() {
+            self.first = Some(previous.clone());
         }
         data.previous = Some(previous);
     }
@@ -271,7 +278,7 @@ impl BlocksBuilder {
         self.data.borrow().previous.as_ref().unwrap().clone()
     }
     pub fn first(&self) -> Option<DataId> {
-        self.data.borrow().first.as_ref().cloned()
+        self.first.clone()
     }
 
     pub fn get_block_mut(
@@ -319,8 +326,8 @@ impl BlocksBuilder {
             }
         }
 
-        if self.data.borrow().first.is_none() {
-            self.data.borrow_mut().first = Some(id.clone());
+        if self.first.is_none() {
+            self.first = Some(id.clone());
         }
 
         BlockBuilder::new(
@@ -336,14 +343,15 @@ impl BlocksBuilder {
         arguments: &[(String, ArgumentTy)],
         argument_ids: &[DataId],
         warp: bool
-    ) -> (Self, Sb3FunctionDefinition) {
+    ) -> (DataId, Sb3FunctionDefinition) {
         let mut definition = Sb3FunctionDefinition::default();
         definition.warp = warp;
 
         let mut proc_definition = self.block("procedures_definition");
         proc_definition.top_level();
+        let proc_definition_id = proc_definition.id().clone();
+        self.reset_previous();
         let mut subbuilder = self.subbuilder_for(proc_definition.id());
-        subbuilder.code = self.code.clone();
         let mut proc_proto = subbuilder.block("procedures_prototype");
         proc_proto.shadow().parent(proc_definition.id.clone());
 
@@ -401,9 +409,8 @@ impl BlocksBuilder {
         let id = proc_definition.finish();
 
         subbuilder.data.borrow_mut().previous = Some(id);
-        self.reset_previous();
 
-        (subbuilder, definition)
+        (proc_definition_id, definition)
     }
 
     pub fn subbuilder_for(
@@ -439,7 +446,7 @@ impl BlockBuilder {
         {
             let mut data = self.builder.data.borrow_mut();
             block.x = Some(data.start_x);
-            data.start_x += 400;
+            data.start_x += 450;
             block.y = Some(data.start_y);
         }
         self

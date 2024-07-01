@@ -241,7 +241,15 @@ fn build_file(
     let libs = Rc::new(libs);
 
     for (lib_name, lib) in libs.libs.iter() {
-        inline_library(lib_name, lib, &mut ast.0).unwrap();
+        match inline_library(lib_name, lib, &mut ast.0) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("{}", "The following error comes from internal library.".bold().on_red());
+                let cache = PurrCache::default();
+                create_error_report(ErrorReport::from(err)).eprint(cache).unwrap();
+                return None;
+            }
+        }
     }
 
     match inline_file_modules(&src_path, &mut ast.0) {

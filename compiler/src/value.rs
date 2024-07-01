@@ -55,6 +55,10 @@ impl Value {
                     block.next = None;
                 }
                 builder.set_previous(possible_parent.clone());
+
+                if builder.first().as_ref() == Some(&call) {
+                    builder.set_first(possible_parent.clone());
+                }
                 // Update all that had this as their next.
                 for block in builder.code_mut().blocks.values_mut() {
                     if block.next.as_ref() == Some(&call) {

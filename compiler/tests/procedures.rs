@@ -94,6 +94,6 @@ fn compile_returning_procedure() {
         Default::default()
     ).unwrap();
 
-    assert_eq!(code.blocks.len(), 13);
+    assert_eq!(code.blocks.len(), 15);
     // TODO: Check correctness of ID's
 }

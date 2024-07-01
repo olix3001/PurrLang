@@ -641,6 +641,41 @@ pub fn parse_expression_assignment(
         });
     }
 
+    match tokens.peek() {
+        Some(Token::AddAssign) |
+        Some(Token::SubAssign) |
+        Some(Token::MulAssign) |
+        Some(Token::DivAssign) |
+        Some(Token::ModAssign) => {
+            let op = tokens.next();
+            let value = parse_expression(tokens, notes)?;
+            return Ok(ast::Expression {
+                pos: subject.pos.start..value.pos.end,
+                kind: ast::ExpressionKind::Assignment(
+                    Box::new(subject.clone()),
+                    Box::new(ast::Expression {
+                        pos: subject.pos.start..value.pos.end,
+                        kind: ast::ExpressionKind::Binary(
+                            Box::new(subject),
+                            match op.unwrap() {
+                                Token::AddAssign => ast::BinaryOp::Add,
+                                Token::SubAssign => ast::BinaryOp::Sub,
+                                Token::MulAssign => ast::BinaryOp::Mul,
+                                Token::DivAssign => ast::BinaryOp::Div,
+                                Token::ModAssign => ast::BinaryOp::Mod,
+                                _ => { unreachable!() }
+                            },
+                            Box::new(value)
+                        ),
+                        id: NodeId::next()
+                    })
+                ),
+                id: NodeId::next()
+            });
+        },
+        _ => {}
+    }
+
     Ok(subject)
 }
 
@@ -842,19 +877,20 @@ pub fn parse_optional_generics(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
 ) -> Result<Vec<ast::TypeVariable>, SyntaxError> {
-    if !tokens.check(Token::Lt) { return Ok(Vec::new()); }
-    if tokens.check(Token::Gt) { return Ok(Vec::new()); }
+    Ok(Vec::new()) // Not implemented.
+    // if !tokens.check(Token::Lt) { return Ok(Vec::new()); }
+    // if tokens.check(Token::Gt) { return Ok(Vec::new()); }
 
-    let arguments = separated(tokens, notes, Token::Comma, |tokens, notes| {
-        // TODO: Add constraints when traits are added.
-        let name = expect_ident(tokens, notes)?;
-        Ok(ast::TypeVariable {
-            name
-        })
-    })?;
-    expect(tokens, notes, Token::Gt)?;
+    // let arguments = separated(tokens, notes, Token::Comma, |tokens, notes| {
+    //     // TODO: Add constraints when traits are added.
+    //     let name = expect_ident(tokens, notes)?;
+    //     Ok(ast::TypeVariable {
+    //         name
+    //     })
+    // })?;
+    // expect(tokens, notes, Token::Gt)?;
 
-    Ok(arguments)
+    // Ok(arguments)
 }
 
 pub fn parse_attributes(
@@ -980,21 +1016,22 @@ fn parse_optional_generic_args(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
 ) -> Result<Option<ast::GenericArgs>, SyntaxError> {
-    if tokens.check(Token::Lt) {
-        let start_pos = tokens.position().unwrap().start+1;
-        let args = separated(
-            tokens,
-            notes,
-            Token::Comma,
-            parse_ty
-        )?;
-        expect(tokens, notes, Token::Gt)?;
-        let end_pos = tokens.position().unwrap().end;
-        Ok(Some(ast::GenericArgs {
-            args,
-            pos: start_pos..end_pos
-        }))
-    } else { Ok(None) }
+    Ok(None) // This is not implemented
+    // if tokens.check(Token::Lt) {
+    //     let start_pos = tokens.position().unwrap().start+1;
+    //     let args = separated(
+    //         tokens,
+    //         notes,
+    //         Token::Comma,
+    //         parse_ty
+    //     )?;
+    //     expect(tokens, notes, Token::Gt)?;
+    //     let end_pos = tokens.position().unwrap().end;
+    //     Ok(Some(ast::GenericArgs {
+    //         args,
+    //         pos: start_pos..end_pos
+    //     }))
+    // } else { Ok(None) }
 }
 
 fn parse_block_definition(
@@ -1190,7 +1227,7 @@ mod tests {
     #[test]
     fn parse_let_without_value() {
         parse_purr_statements(
-            "let hello_world: Lorem<Ipsum>::Dolor;".to_string(),
+            "let hello_world: Lorem::Ipsum;".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
@@ -1265,7 +1302,7 @@ mod tests {
     #[test]
     fn parse_call_and_field() {
         parse_purr_statements(
-            "hello.world:<number>().my.result(lorem, ipsum)(1, 2, true);Hello::World<number>()".to_string(),
+            "hello.world().my.result(lorem, ipsum)(1, 2, true);Hello::World()".to_string(),
             PurrSource::Unknown
         ).unwrap(); // If It does not panic then should be fine
     }
@@ -1333,7 +1370,7 @@ mod tests {
     fn parse_struct_definition() {
         parse_purr(
             "
-            struct Labelled<T> {
+            struct Labelled {
                 value: T,
                 label: text
             }

@@ -44,9 +44,9 @@ impl ResolvedTy {
                 let path_span = path.pos.clone();
                 let path: ResolutionPath = path.clone().into();
 
-                if let Some(target) = tree.resolve_lib(&path) {
-                    return Ok(Self::Path(target));
-                }
+                // if let Some(target) = tree.resolve_lib(&path) {
+                //     return Ok(Self::Path(target));
+                // }
 
                 if let Some(target) = tree.resolve_name(
                     &current.clone().join(&path)
@@ -55,11 +55,13 @@ impl ResolvedTy {
                 }
 
                 if let Some(current) = tree.resolve_tree(current) {
-                    if path.segments.len() < 1 { return Err(CompilerError::UnknownPath {
-                        path: path.segments,
-                        pos: path_span,
-                        file: file.clone()
-                    }); }
+                    if path.segments.len() < 1 {
+                        return Err(CompilerError::UnknownPath {
+                            path: path.segments,
+                            pos: path_span,
+                            file: file.clone()
+                        });
+                    }
 
                     if let Some(prefix) = current.imports.get(path.segments.first().unwrap()) {
                         let path = ResolutionPath {

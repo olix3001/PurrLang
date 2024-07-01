@@ -62,7 +62,7 @@ pub fn compile_items_prepass(
     notes: &mut CompileNotes
 ) -> Result<(), CompilerError> {
     for item in items.iter() {
-        if notes.items_to_skip.contains(&item.id) { continue; }
+        if notes.items_to_skip.contains(&item.id) { ;continue; }
         match &item.kind {
             ast::ItemKind::Module(module) => {
                 let temp_file = notes.current_file.clone();
@@ -90,8 +90,13 @@ pub fn compile_items_prepass(
                     item.id,
                     notes
                 );
-                let (sb, def) = builder.define_function(
-                    &definition.name,
+                builder.reset_previous();
+                let (di, def) = builder.define_function(
+                    &format!(
+                        "{}@{:04x}", 
+                        definition.name,
+                        item.id.num()
+                    ),
                     function_args.as_slice(),
                     ids.as_slice(),
                     item.attributes.tags.iter().any(|tag|
@@ -118,7 +123,7 @@ pub fn compile_items_prepass(
                 notes.proc_arguments.extend(current_args.clone().into_iter());
 
                 notes.proc_definitions.insert(item.id, def);
-                notes.proc_definition_ids.insert(item.id, sb.previous());
+                notes.proc_definition_ids.insert(item.id, di);
                 let return_value = get_proc_return(item.id, builder, notes)?;
                 notes.proc_returns.insert(item.id, return_value);
             }
@@ -246,6 +251,7 @@ pub fn compile_trigger(
             )
         ))
     };
+    builder.reset_previous();
     let mut block = builder.block(opcode);
     block.top_level();
 
@@ -272,7 +278,6 @@ pub fn compile_trigger(
     }
 
     let block = block.finish();
-    builder.reset_previous();
 
     Ok(block)
 }
@@ -363,6 +368,13 @@ pub fn compile_statements(
                 let mut b = builder.block("control_repeat_until");
 
                 let condition = compile_expr(&condition, builder, notes)?;
+                // Repeat until works opposite to a while for some reason.
+                let condition = {
+                    let mut b = builder.block("operator_not");
+                    b.input("OPERAND", &[condition.into_sb3(builder, b.id())?]);
+                    Value::BlockCall(b.finish())
+                };
+
                 b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
 
                 let mut substack_builder = builder.subbuilder_for(b.id());
