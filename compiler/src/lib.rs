@@ -62,7 +62,7 @@ pub fn compile_items_prepass(
     notes: &mut CompileNotes
 ) -> Result<(), CompilerError> {
     for item in items.iter() {
-        if notes.items_to_skip.contains(&item.id) { ;continue; }
+        if notes.items_to_skip.contains(&item.id) { continue; }
         match &item.kind {
             ast::ItemKind::Module(module) => {
                 let temp_file = notes.current_file.clone();

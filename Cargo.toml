@@ -1,5 +1,6 @@
 [workspace.package]
 repository = "https://github.com/olix3001/PurrLang"
+version = "0.2.0-alpha"
 
 [workspace]
 resolver = "2"

@@ -10,7 +10,7 @@ you need to clone and compile this repo manually.
 1. Clone the repository into any directory that you like using
 `git clone https://github.com/olix3001/PurrLang`.
 2. Compile It using `cargo build --release` (this will compile `catnip` binary).
-3. Add `PurrLang/target/release` to your PATH.
+3. Add `PurrLang/target/release` to your PATH (DO NOT RUN cargo install!!!).
 4. Go to your project directory and use `catnip build`. (You can check out [examples](./examples)).
 
 # Syntax
