@@ -1087,7 +1087,7 @@ fn parse_block_definition(
     notes: &mut ParseNotes
 ) -> Result<ast::BlockDefinition, SyntaxError> {
     let name = expect_ident(tokens, notes)?;
-    let signature = parse_signature(tokens, notes, ast::TyKind::Ptr)?;
+    let signature = parse_signature(tokens, notes, ast::TyKind::Void)?;
     let opcode = expect_ident(tokens, notes)?;
     let body = parse_values_struct(tokens, notes, true)?;
 

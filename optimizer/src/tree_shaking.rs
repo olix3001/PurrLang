@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use error::CompilerError;
 use parser::ast::{self, NodeId};
-use petgraph::{algo::dijkstra, data::Build, graph::{DiGraph, NodeIndex}, visit::NodeRef};
+use petgraph::{algo::dijkstra, graph::{DiGraph, NodeIndex}};
 use resolution::{project_tree::{ProjectTree, ResolutionPath}, resolve::ResolvedData, ResolvedTy};
 
 pub(crate) fn build_usage_graph(
@@ -151,14 +151,6 @@ pub(crate) fn find_usages_in_statements(
                 find_usages_in_expression(expr, resolved, project_tree, graph, current_id, node_ids)?;
             }
 
-            ast::StatementKind::Conditional(cond, if_true, if_false) => {
-                find_usages_in_expression(cond, resolved, project_tree, graph, current_id, node_ids)?;
-                find_usages_in_statements(if_true, resolved, project_tree, graph, current_id, node_ids)?;
-                if let Some(if_false) = &if_false {
-                    find_usages_in_statements(if_false, resolved, project_tree, graph, current_id, node_ids)?;
-                }
-            }
-
             ast::StatementKind::Repeat(cc, body) |
             ast::StatementKind::While(cc, body) => {
                 find_usages_in_expression(cc, resolved, project_tree, graph, current_id, node_ids)?;
@@ -193,6 +185,16 @@ pub(crate) fn find_usages_in_expression(
                     *node_ids.get(id).unwrap(),
                     ()
                 );
+            }
+        }
+        ast::ExpressionKind::Block(block) => {
+            find_usages_in_statements(&block, resolved, project_tree, graph, current_id, node_ids)?;
+        }
+        ast::ExpressionKind::Conditional(conditional) => {
+            find_usages_in_expression(&conditional.condition, resolved, project_tree, graph, current_id, node_ids)?;
+            find_usages_in_statements(&conditional.body, resolved, project_tree, graph, current_id, node_ids)?;
+            if let Some(if_false) = &conditional.else_body {
+                find_usages_in_statements(if_false, resolved, project_tree, graph, current_id, node_ids)?;
             }
         }
         ast::ExpressionKind::Unary(_, expr) =>

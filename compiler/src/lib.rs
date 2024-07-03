@@ -163,11 +163,15 @@ pub fn compile_items(
                     .unwrap().clone();
                 let mut subbuilder = builder.subbuilder_for(&definition_id);
                 notes.current_proc = Some(item.id);
+                notes.current_nosemi_return = Some(
+                    get_proc_return(item.id, builder, notes)?
+                );
                 compile_statements(
                     &definition.body,
                     &mut subbuilder,
                     notes
                 )?;
+                notes.current_nosemi_return = None;
                 notes.current_proc = None;
             }
             _ => {}
@@ -294,13 +298,18 @@ pub fn compile_statements(
                 compile_expr(expr, builder, notes)?;
             }
             ast::StatementKind::ExprNoSemi(expr) => {
-                let Some(current_proc) = notes.current_proc
-                else { panic!("Temporary error: Returning expression (no-semicolon) may only be used in procedures")};
+                if notes.resolved_data.types.get(&stmt.id).cloned() == Some(ResolvedTy::Void) {
+                    compile_expr(expr, builder, notes)?;
+                    continue;
+                }
+
+                let Some(block_ret) = notes.current_nosemi_return.clone()
+                else { panic!("Temporary error: Returning expression (no-semicolon) may only be used in returning blocks.")};
                 // TODO: Allow if expr type is void.
                 
                 write_variable(
                     // TODO: Use current_nosemi_return.
-                    &notes.proc_returns.get(&current_proc).unwrap().clone(),
+                    &block_ret,
                     compile_expr(expr, builder, notes)?,
                     builder,
                     notes
@@ -509,7 +518,7 @@ pub fn compile_expr(
             panic!("Path resolution went wrong... sorry :c");
         }
 
-        ast::ExpressionKind::Block(block) => {
+        ast::ExpressionKind::Block(_block) => {
             todo!("Block expressions are not implemented yet :D")
         }
 
@@ -522,9 +531,11 @@ pub fn compile_expr(
             let condition = compile_expr(&conditional.condition, builder, notes)?;
             b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
 
-            // TODO: Somehow store value from last NoSemi.
-            // IDEA: return Value::Empty or Value::<something> from compile_statements(...).
-            // TODO: Assign current_nosemi_return.
+            let ty = notes.resolved_data.types.get(&expr.id).unwrap();
+            // TODO: Optimise this to use only one variable for chains.
+            let vars = define_variables_for_type("cond:block", expr.id, ty, builder, notes)?;
+            let nosemi_temp = notes.current_nosemi_return.take();
+            notes.current_nosemi_return = Some(vars);
             let mut substack_builder = builder.subbuilder_for(b.id());
             compile_statements(&conditional.body, &mut substack_builder, notes)?;
             if let Some(first) = substack_builder.first() {
@@ -539,7 +550,10 @@ pub fn compile_expr(
                 }
             }
 
-            todo!("READ ABOVE TODO")
+            let Some(vars) = notes.current_nosemi_return.take() else { unreachable!() };
+            notes.current_nosemi_return = nosemi_temp;
+
+            Ok(vars)
         }
 
         ast::ExpressionKind::TypeCast(cast_expr, _) => 

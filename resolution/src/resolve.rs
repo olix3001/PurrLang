@@ -452,7 +452,7 @@ pub fn resolve_statements(
 
                 if expr_ty.matches(&ResolvedTy::Void, resolved, notes) {
                     resolved.types.insert(
-                        stmt.id, expr_ty
+                        stmt.id, ResolvedTy::Void
                     );
                     continue;
                 }
@@ -996,6 +996,20 @@ fn resolve_conditional(
         stack.push();
         resolve_statements(if_false, resolved, stack, notes)?;
         stack.pop();
+    } else if block_ty != ResolvedTy::Void {
+        return Err(CompilerError::Custom(
+            create_error(
+                error::info::ErrorInfo::from_area(CodeArea {
+                    pos: cond.pos.clone(), file: notes.current_file.clone()
+                }),
+                "Compilation error",
+                &[(
+                    CodeArea { pos: cond.pos.clone(), file: notes.current_file.clone() },
+                    "If expression that returns value must have \"else\" block.",
+                )],
+                None
+            )
+        ));
     }
     notes.expected_block_ty = temp;
     Ok(block_ty)
