@@ -176,6 +176,7 @@ pub enum ExpressionKind {
     },
 
     StructLiteral(PurrPath, Vec<ValueField>),
+    TypeCast(Box<Expression>, Box<Ty>),
 
     Number(f64),
     String(String),

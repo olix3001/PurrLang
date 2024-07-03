@@ -530,6 +530,9 @@ pub fn compile_expr(
             panic!("Path resolution went wrong... sorry :c");
         }
 
+        ast::ExpressionKind::TypeCast(cast_expr, _) => 
+            compile_expr(cast_expr, builder, notes),
+
         ast::ExpressionKind::Assignment(subject, value) => {
             let subject_value = compile_expr(subject, builder, notes)?;
             let value_value = compile_expr(value, builder, notes)?;

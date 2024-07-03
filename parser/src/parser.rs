@@ -94,6 +94,7 @@ pub enum Token {
     #[token("continue")] Continue,
     #[token("ptr")] Ptr,
     #[token("import")] Import,
+    #[token("as")] As,
 
     // ==< Primitive types >==
     #[token("void")] Void,
@@ -132,7 +133,7 @@ impl<'src> Token {
 
             Block | Const | Let | Cloud | Global | Enum | Struct |
             Impl | Repeat | While | Loop | If | Else | Return | Define |
-            Comptime | Match | Module | Break | Continue | Import => "keyword",
+            Comptime | Match | Module | Break | Continue | Import | As => "keyword",
 
             NumberLit | HexNumberLit => "number literal",
             StringLit => "string literal",
@@ -620,7 +621,28 @@ pub fn parse_unary_expression(
             pos: start_pos..end_pos,
             id: NodeId::next()
         })
-    } else { parse_expression_assignment(tokens, notes) }
+    } else { parse_expression_type_cast(tokens, notes) }
+}
+
+pub fn parse_expression_type_cast(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Expression, SyntaxError> {
+    let lhs = parse_expression_assignment(tokens, notes)?;
+
+    if tokens.check(Token::As) {
+        let ty = parse_ty(tokens, notes)?;
+        return Ok(ast::Expression {
+            pos: lhs.pos.start..ty.pos.end,
+            kind: ast::ExpressionKind::TypeCast(
+                Box::new(lhs),
+                Box::new(ty)
+            ),
+            id: NodeId::next()
+        });
+    }
+
+    Ok(lhs)
 }
 
 pub fn parse_expression_assignment(

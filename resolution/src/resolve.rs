@@ -568,6 +568,24 @@ pub fn resolve_expr(
             resolved_ty
         },
 
+        ast::ExpressionKind::TypeCast(cast_expr, cast_ty) => {
+            let expr_ty = resolve_expr(cast_expr, resolved, stack, notes)?;
+            let ty = resolve_ty(cast_ty, notes)?;
+
+            if !expr_ty.matches(&ty, resolved, notes) {
+                return Err(CompilerError::MismatchedTypes {
+                    pos: expr.pos.clone(),
+                    lhs: cast_expr.pos.clone(),
+                    lhs_ty: expr_ty.pretty_name(notes.project_tree),
+                    rhs: cast_ty.pos.clone(),
+                    rhs_ty: ty.pretty_name(notes.project_tree),
+                    file: notes.current_file.clone()
+                });
+            }
+
+            ty
+        },
+
         ast::ExpressionKind::Assignment(subject, value) => {
             let subject_ty = resolve_expr(subject, resolved, stack, notes)?;
             let value_ty = resolve_expr(value, resolved, stack, notes)?;
