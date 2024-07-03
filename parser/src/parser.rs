@@ -434,7 +434,6 @@ pub fn parse_statement(
             )
         }
 
-        Some(Token::If) => parse_conditional(tokens, notes)?,
         Some(Token::Repeat) => {
             let count = parse_expression(tokens, notes)?;
             expect(tokens, notes, Token::Arrow)?;
@@ -503,37 +502,46 @@ pub fn parse_statement(
 fn parse_conditional(
     tokens: &mut Tokens,
     notes: &mut ParseNotes
-) -> Result<ast::StatementKind, SyntaxError> {
+) -> Result<ast::Conditional, SyntaxError> {
     let condition = parse_expression(tokens, notes)?;
     expect(tokens, notes, Token::Arrow)?;
     expect(tokens, notes, Token::LCurly)?;
     let body = parse_statements_until(tokens, notes, Token::RCurly)?;
 
-    let mut stmt = ast::StatementKind::Conditional(
-        Box::new(condition),
+    let mut stmt = ast::Conditional {
+        condition: Box::new(condition),
         body,
-        None
-    );
+        else_body: None
+    };
     
     if tokens.check(Token::Else) {
         let start_pos = tokens.position().unwrap().start;
-        let else_ = if tokens.peek() == Some(Token::If) {
-            vec![
+        if tokens.check(Token::If) {
+            let else_conditional = parse_conditional(tokens, notes)?;
+            let end_pos = tokens.position().unwrap().end;
+            let else_expr = ast::Expression {
+                pos: start_pos..end_pos,
+                kind: ast::ExpressionKind::Conditional(
+                    else_conditional
+                ),
+                id: NodeId::next()
+            };
+
+            stmt.else_body = Some(vec![
                 ast::Statement {
-                    kind: parse_conditional(tokens, notes)?,
-                    pos: start_pos..tokens.position().unwrap().end,
-                    attributes: Attributes::default(),
+                    pos: else_expr.pos.clone(),
+                    kind: ast::StatementKind::ExprNoSemi(
+                        else_expr
+                    ),
+                    attributes: ast::Attributes::default(),
                     id: NodeId::next()
                 }
-            ]
+            ])
         } else { 
             expect(tokens, notes, Token::LCurly)?;
-            parse_statements_until(tokens, notes, Token::RCurly)?
+            let else_body = parse_statements_until(tokens, notes, Token::RCurly)?;
+            stmt.else_body = Some(else_body)
         };
-
-        let ast::StatementKind::Conditional(_, _, ref mut else_cond) = stmt
-            else { unreachable!() };
-        *else_cond = Some(else_);
     }
 
     Ok(stmt)
@@ -543,6 +551,26 @@ pub fn parse_expression(
     tokens: &mut Tokens,
     notes: &mut ParseNotes,
 ) -> Result<ast::Expression, SyntaxError> {
+    parse_expression_if_else(tokens, notes)
+}
+
+pub fn parse_expression_if_else(
+    tokens: &mut Tokens,
+    notes: &mut ParseNotes
+) -> Result<ast::Expression, SyntaxError> {
+    if tokens.check(Token::If) {
+        let start_pos = tokens.position().unwrap().start;
+        let conditional = parse_conditional(tokens, notes)?;
+        let end_pos = tokens.position().unwrap().end;
+        return Ok(ast::Expression {
+            pos: start_pos..end_pos,
+            kind: ast::ExpressionKind::Conditional(
+                conditional
+            ),
+            id: NodeId::next()
+        });
+    }
+
     parse_binary_expression_or(tokens, notes)
 }
 

@@ -54,7 +54,6 @@ pub enum StatementKind {
 
     LetDefinition(LetDefinition),
 
-    Conditional(Box<Expression>, Vec<Statement>, Option<Vec<Statement>>),
     Repeat(Box<Expression>, Vec<Statement>),
     While(Box<Expression>, Vec<Statement>),
 
@@ -177,10 +176,19 @@ pub enum ExpressionKind {
 
     StructLiteral(PurrPath, Vec<ValueField>),
     TypeCast(Box<Expression>, Box<Ty>),
+    Conditional(Conditional),
+    Block(Vec<Statement>),
 
     Number(f64),
     String(String),
     Bool(bool)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Conditional {
+    pub condition: Box<Expression>,
+    pub body: Vec<Statement>,
+    pub else_body: Option<Vec<Statement>>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

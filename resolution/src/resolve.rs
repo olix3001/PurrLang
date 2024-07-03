@@ -399,31 +399,6 @@ pub fn resolve_statements(
                 stack.top().define_variable(&definition.symbol, stmt.id);
             },
 
-            ast::StatementKind::Conditional(cond, if_true, if_false) => {
-                let cond_ty = resolve_expr(cond, resolved, stack, notes)?;
-
-                if !cond_ty.matches(&ResolvedTy::Bool, resolved, notes) {
-                    return Err(CompilerError::UnexpectedType {
-                        pos: cond.pos.clone(),
-                        file: notes.current_file.clone(),
-                        expected_type: ResolvedTy::Bool.pretty_name(notes.project_tree),
-                        found_type: cond_ty.pretty_name(notes.project_tree)
-                    });
-                }
-
-                let temp = notes.expected_block_ty.take();
-                notes.expected_block_ty = Some((ResolvedTy::Void, stmt.pos.clone()));
-                stack.push();
-                resolve_statements(if_true, resolved, stack, notes)?;
-                stack.pop();
-                if let Some(if_false) = &if_false {
-                    stack.push();
-                    resolve_statements(if_false, resolved, stack, notes)?;
-                    stack.pop();
-                }
-                notes.expected_block_ty = temp;
-            }
-
             ast::StatementKind::Repeat(count, body) => {
                 let count_ty = resolve_expr(count, resolved, stack, notes)?;
 
@@ -472,6 +447,16 @@ pub fn resolve_statements(
                 );
             },
             ast::StatementKind::ExprNoSemi(expr) => {
+                let expr_ty = 
+                    resolve_expr(expr, resolved, stack, notes)?;
+
+                if expr_ty.matches(&ResolvedTy::Void, resolved, notes) {
+                    resolved.types.insert(
+                        stmt.id, expr_ty
+                    );
+                    continue;
+                }
+
                 if i != ast.len()-1 {
                     return Err(CompilerError::Custom(
                         create_error(
@@ -487,8 +472,6 @@ pub fn resolve_statements(
                         )
                     ));
                 }
-                let expr_ty = 
-                    resolve_expr(expr, resolved, stack, notes)?;
                 if let Some((block_ty, block_pos)) = &notes.expected_block_ty {
                     if !expr_ty.matches(block_ty, resolved, notes) {
                         return Err(CompilerError::MismatchedTypes {
@@ -663,6 +646,19 @@ pub fn resolve_expr(
                 });
             }
         },
+
+        ast::ExpressionKind::Block(body) => {
+            stack.push();
+            let ret = resolve_statements(body, resolved, stack, notes)?;
+            stack.pop();
+            ret
+        }
+
+        ast::ExpressionKind::Conditional(_) => {
+            let ty = resolve_conditional(expr, resolved, stack, notes)?;
+            resolved.types.insert(expr.id, ty.clone());
+            ty
+        }
 
         ast::ExpressionKind::Call { callee, generics: _generics, arguments } => {
             let callee_ty = resolve_expr(callee, resolved, stack, notes)?;
@@ -969,6 +965,40 @@ pub fn resolve_expr(
         _ => { notes.default_ret_ty.clone() }
     };
     Ok(resolved)
+}
+
+fn resolve_conditional(
+    cond: &ast::Expression,
+    resolved: &mut ResolvedData,
+    stack: &mut Stack,
+    notes: &mut ResolutionNotes
+) -> Result<ResolvedTy, CompilerError> {
+    let ast::ExpressionKind::Conditional(ref conditional) = &cond.kind
+        else { unreachable!() };
+    let cond_ty = resolve_expr(&conditional.condition, resolved, stack, notes)?;
+
+    if !cond_ty.matches(&ResolvedTy::Bool, resolved, notes) {
+        return Err(CompilerError::UnexpectedType {
+            pos: cond.pos.clone(),
+            file: notes.current_file.clone(),
+            expected_type: ResolvedTy::Bool.pretty_name(notes.project_tree),
+            found_type: cond_ty.pretty_name(notes.project_tree)
+        });
+    }
+
+    // TODO: Change this to currently expected expression type
+    let temp = notes.expected_block_ty.take();
+    stack.push();
+    let block_ty = resolve_statements(&conditional.body, resolved, stack, notes)?;
+    stack.pop();
+    notes.expected_block_ty = Some((block_ty.clone(), cond.pos.clone()));
+    if let Some(if_false) = &conditional.else_body {
+        stack.push();
+        resolve_statements(if_false, resolved, stack, notes)?;
+        stack.pop();
+    }
+    notes.expected_block_ty = temp;
+    Ok(block_ty)
 }
 
 fn resolve_ty(

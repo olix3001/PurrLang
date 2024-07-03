@@ -20,7 +20,8 @@ pub struct CompileNotes<'a> {
     proc_definition_ids: HashMap<NodeId, DataId>,
     proc_returns: HashMap<NodeId, Value>,
     current_proc: Option<NodeId>,
-    items_to_skip: HashSet<NodeId>
+    items_to_skip: HashSet<NodeId>,
+    current_nosemi_return: Option<Value>
 }
 
 pub fn compile_purr(
@@ -38,7 +39,8 @@ pub fn compile_purr(
         proc_definition_ids: HashMap::new(),
         proc_returns: HashMap::new(),
         current_proc: None,
-        items_to_skip
+        items_to_skip,
+        current_nosemi_return: None
     };
     let mut builder = BlocksBuilder::new();
 
@@ -297,6 +299,7 @@ pub fn compile_statements(
                 // TODO: Allow if expr type is void.
                 
                 write_variable(
+                    // TODO: Use current_nosemi_return.
                     &notes.proc_returns.get(&current_proc).unwrap().clone(),
                     compile_expr(expr, builder, notes)?,
                     builder,
@@ -324,30 +327,6 @@ pub fn compile_statements(
                 stop.block.as_mut().unwrap().mutation = Some(Mutation::no_next());
                 stop.field("STOP_OPTION", Sb3Field::Argument("this script".to_string()));
                 return Ok(());
-            }
-
-            ast::StatementKind::Conditional(condition, if_true, if_false) => {
-                let mut b = builder.block(
-                    if if_false.is_some() { "control_if_else" }
-                    else { "control_if" }
-                );
-
-                let condition = compile_expr(condition, builder, notes)?;
-                b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
-
-                let mut substack_builder = builder.subbuilder_for(b.id());
-                compile_statements(if_true, &mut substack_builder, notes)?;
-                if let Some(first) = substack_builder.first() {
-                    b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
-                }
-
-                if let Some(if_false) = &if_false {
-                    let mut substack_builder = builder.subbuilder_for(b.id());
-                    compile_statements(if_false, &mut substack_builder, notes)?;
-                    if let Some(first) = substack_builder.first() {
-                        b.input("SUBSTACK2", &[Sb3Value::Ptr(first)]);
-                    }
-                }
             }
 
             ast::StatementKind::Repeat(count, body) => {
@@ -528,6 +507,39 @@ pub fn compile_expr(
             }
 
             panic!("Path resolution went wrong... sorry :c");
+        }
+
+        ast::ExpressionKind::Block(block) => {
+            todo!("Block expressions are not implemented yet :D")
+        }
+
+        ast::ExpressionKind::Conditional(conditional) => {
+            let mut b = builder.block(
+                if conditional.else_body.is_some() { "control_if_else" }
+                else { "control_if" }
+            );
+
+            let condition = compile_expr(&conditional.condition, builder, notes)?;
+            b.input("CONDITION", &[condition.into_sb3(builder, b.id())?]);
+
+            // TODO: Somehow store value from last NoSemi.
+            // IDEA: return Value::Empty or Value::<something> from compile_statements(...).
+            // TODO: Assign current_nosemi_return.
+            let mut substack_builder = builder.subbuilder_for(b.id());
+            compile_statements(&conditional.body, &mut substack_builder, notes)?;
+            if let Some(first) = substack_builder.first() {
+                b.input("SUBSTACK", &[Sb3Value::Ptr(first)]);
+            }
+
+            if let Some(if_false) = &conditional.else_body {
+                let mut substack_builder = builder.subbuilder_for(b.id());
+                compile_statements(if_false, &mut substack_builder, notes)?;
+                if let Some(first) = substack_builder.first() {
+                    b.input("SUBSTACK2", &[Sb3Value::Ptr(first)]);
+                }
+            }
+
+            todo!("READ ABOVE TODO")
         }
 
         ast::ExpressionKind::TypeCast(cast_expr, _) => 
